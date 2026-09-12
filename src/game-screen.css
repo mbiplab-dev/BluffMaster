@@ -421,7 +421,7 @@ main {
 .local-reaction-dock {
   position: absolute;
   z-index: 19;
-  left: calc(50% + 40px);
+  left: calc(50% - 68px);
   top: calc(90% - 16px);
   width: 28px;
   height: 28px;
@@ -444,7 +444,7 @@ main {
 .emoji-toggle:disabled { opacity: .38; cursor: default; }
 .reaction-picker {
   position: absolute;
-  right: -6px;
+  left: -6px;
   bottom: 35px;
   width: 146px;
   display: grid;
