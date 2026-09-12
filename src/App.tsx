@@ -213,7 +213,6 @@ export default function App() {
     state?.players.map((p) => `${p.id}:${p.name}`).join(",") ?? "",
   );
   const handRef = useRef<HTMLDivElement>(null);
-  const activityRef = useRef<HTMLDivElement>(null);
   const previous = useRef<Snapshot | null>(null);
   const isTurn =
     !!state &&
@@ -459,12 +458,6 @@ export default function App() {
   useEffect(() => {
     if (seconds === 5 && isTurn) playSound("warning");
   }, [seconds, isTurn]);
-  useEffect(() => {
-    activityRef.current?.scrollTo({
-      top: activityRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [state?.activity.length, state?.activity.at(-1)?.id]);
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (
@@ -1833,72 +1826,6 @@ export default function App() {
                       ? "Voice on"
                       : "Join voice"}
                 </button>
-              </section>
-              <section className="activity-card">
-                <div className="rail-section-title">
-                  <h3>The play-by-play</h3>
-                  <span className="activity-live">
-                    <span className="live-dot" /> LIVE
-                  </span>
-                </div>
-                <div
-                  className="activity-list"
-                  ref={activityRef}
-                  aria-live="polite"
-                  aria-relevant="additions"
-                >
-                  {state?.activity.map((event) => (
-                    <div
-                      className={`activity-event event-${event.kind}`}
-                      key={event.id}
-                    >
-                      {event.actor ? (
-                        <Avatar
-                          index={event.actor.avatar}
-                          className="activity-avatar"
-                        />
-                      ) : (
-                        <span className="activity-icon">
-                          {event.kind === "bluff" ? (
-                            <Flag size={13} />
-                          ) : event.kind === "play" ? (
-                            <Layers size={13} />
-                          ) : event.kind === "win" ? (
-                            <Crown size={13} />
-                          ) : (
-                            <Sparkles size={13} />
-                          )}
-                        </span>
-                      )}
-                      <div>
-                        {event.actor && (
-                          <strong className="activity-player-name">
-                            {event.actor.name}
-                          </strong>
-                        )}
-                        <p>
-                          {event.actor &&
-                          event.text.startsWith(`${event.actor.name} `)
-                            ? event.text.slice(event.actor.name.length + 1)
-                            : event.text}
-                        </p>
-                        <time>
-                          {new Date(event.at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </time>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="table-tip">
-                  <span>✧</span>
-                  <p>
-                    A little hesitation can tell
-                    <br />a whole lot of truth.
-                  </p>
-                </div>
               </section>
             </aside>
           </div>

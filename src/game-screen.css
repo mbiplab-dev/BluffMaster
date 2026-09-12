@@ -3513,6 +3513,23 @@ main {
     grid-template-rows: 44px 59px minmax(0, 1fr) auto;
   }
 }
+@media (max-width: 760px) {
+  /* A fixed oval aspect keeps the physical table from becoming a tall disc in portrait. */
+  .table-stage > .table-physical {
+    width: 94%;
+    left: 3%;
+    height: auto;
+    aspect-ratio: 1.72 / 1;
+    top: 22%;
+  }
+  .table-stage.phase-winner > .table-physical {
+    width: 88%;
+    left: 6%;
+    top: 27%;
+    opacity: .78;
+  }
+  .phase-winner .winner-scene { transform: scale(.88); }
+}
 .table-stage .center-claim > span {
   font-size: 11px;
   line-height: 1.3;
