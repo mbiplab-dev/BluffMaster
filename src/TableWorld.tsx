@@ -30,6 +30,10 @@ type World = {
   markers: Group;
   particles: Points;
   resize: () => void;
+  phase: Phase;
+  targetScale: number;
+  targetLift: number;
+  pulse: number;
 };
 
 function roundedShape(width: number, height: number, radius: number) {
@@ -161,11 +165,33 @@ export function TableWorld({
       const observer = new ResizeObserver(resize);
       observer.observe(container);
       resize();
-      world.current = { renderer, scene, camera, pile, markers, particles, resize };
+      world.current = {
+        renderer,
+        scene,
+        camera,
+        pile,
+        markers,
+        particles,
+        resize,
+        phase: "turn",
+        targetScale: 1,
+        targetLift: 0.04,
+        pulse: 0,
+      };
       const clock = performance.now();
       const animate = (time: number) => {
         const drift = motion.current ? (time - clock) / 1000 : 0;
-        pile.rotation.y = drift * 0.12;
+        const activeWorld = world.current;
+        const pulse = activeWorld?.pulse ?? 0;
+        const scale = (activeWorld?.targetScale ?? 1) + pulse * 0.18;
+        pile.scale.x += (scale - pile.scale.x) * 0.13;
+        pile.scale.y += (scale - pile.scale.y) * 0.13;
+        pile.scale.z += (scale - pile.scale.z) * 0.13;
+        pile.position.y += ((activeWorld?.targetLift ?? 0.04) - pile.position.y) * 0.14;
+        if (activeWorld) activeWorld.pulse *= 0.84;
+        pile.rotation.y = drift * (activeWorld?.phase === "challenge" ? 0.26 : 0.12);
+        pile.rotation.x = activeWorld?.phase === "reveal" ? Math.sin(drift * 13) * 0.16 : 0;
+        pile.rotation.z = activeWorld?.phase === "resolution" ? Math.sin(drift * 8) * 0.11 : 0;
         particles.rotation.y = -drift * 0.045;
         markers.children.forEach((marker, index) => {
           marker.position.y = 0.07 + (motion.current ? Math.sin(drift * 1.6 + index) * 0.028 : 0);
@@ -195,6 +221,11 @@ export function TableWorld({
     if (!current) return;
     current.pile.children.forEach((card, index) => (card.visible = index < Math.min(12, Math.max(1, pileCount))));
     current.markers.children.forEach((marker, index) => (marker.visible = index < playerCount));
+    current.phase = phase;
+    current.pulse = 1;
+    current.targetScale =
+      phase === "challenge" ? 1.18 : phase === "reveal" ? 1.36 : phase === "resolution" ? 0.86 : 1;
+    current.targetLift = phase === "challenge" ? 0.2 : phase === "reveal" ? 0.34 : 0.04;
     const urgent = phase === "reveal" || phase === "resolution";
     const topCard = current.pile.children[0] as Mesh | undefined;
     if (topCard?.material instanceof MeshPhysicalMaterial)

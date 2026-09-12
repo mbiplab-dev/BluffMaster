@@ -45,9 +45,11 @@ import {
 } from "react";
 import {
   LIMITS,
+  REACTIONS,
   rankName,
   RANKS,
   type Rank,
+  type Reaction,
   type Snapshot,
 } from "../shared/types";
 import { playSound, soundEnabled, unlockAudio } from "./audio";
@@ -129,6 +131,42 @@ function PlayerRoster({
   );
 }
 
+function ReactionBursts({
+  reactions,
+  state,
+}: {
+  reactions: Reaction[];
+  state: Snapshot;
+}) {
+  return (
+    <div className="reaction-bursts" aria-live="polite" aria-label="Table reactions">
+      {reactions.map((reaction) => {
+        const player = state.players.find((item) => item.id === reaction.playerId);
+        if (!player) return null;
+        const local = player.id === state.selfId;
+        const others = state.players.filter((item) => item.id !== state.selfId);
+        const index = others.findIndex((item) => item.id === player.id);
+        const angle = ((90 + (360 * (index + 1)) / state.players.length) * Math.PI) / 180;
+        const left = local
+          ? 50
+          : 50 + Math.cos(angle) * (Math.abs(Math.cos(angle)) > 0.95 ? 42 : 35);
+        const top = local ? 83 : 50 + Math.sin(angle) * 36;
+        return (
+          <span
+            className="reaction-burst"
+            key={reaction.id}
+            style={{ left: `${left}%`, top: `${top}%` }}
+            role="status"
+          >
+            <b>{reaction.emoji}</b>
+            <small>{local ? "You" : player.name}</small>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,7 +175,7 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 4800);
   }, []);
-  const { state, rooms, connected, busy, socket, act, offset } =
+  const { state, rooms, connected, busy, socket, act, offset, reactions } =
     useGame(notify);
   const [joinCode, setJoinCode] = useState("");
   const [joinWatching, setJoinWatching] = useState(false);
@@ -200,6 +238,12 @@ export default function App() {
   const seconds = state?.deadline
     ? Math.max(0, Math.ceil((state.deadline - now - offset.current) / 1000))
     : 0;
+  const timedPhase = state?.phase === "turn" || state?.phase === "challenge";
+  const timerDuration =
+    state?.phase === "challenge"
+      ? state.settings.challengeSeconds
+      : state?.settings.turnSeconds ?? 1;
+  const timerProgress = Math.max(0, Math.min(100, (seconds / timerDuration) * 100));
   const play = async () => {
     if (!selected.length) {
       notify("Select the cards you want to play first.");
@@ -797,6 +841,23 @@ export default function App() {
                         : "INVITE ONLY"}
                   </span>
                 </div>
+                {timedPhase && (
+                  <div
+                    className={`top-turn-timer ${seconds <= 10 ? "timer-hurry" : ""} ${seconds <= 5 ? "timer-critical" : ""}`}
+                    aria-label={`${seconds} seconds remaining`}
+                  >
+                    <span
+                      className="top-turn-timer-ring"
+                      style={{ "--timer-progress": `${timerProgress}%` } as CSSProperties}
+                    >
+                      <b>{seconds}</b>
+                    </span>
+                    <span>
+                      <strong>{state?.phase === "challenge" ? "CALL IT" : isTurn ? "YOUR TURN" : "TURN"}</strong>
+                      <small>{seconds <= 10 ? "HURRY!" : "SECONDS LEFT"}</small>
+                    </span>
+                  </div>
+                )}
                 <div className="table-meta">
                   <button
                     className="table-invite"
@@ -818,6 +879,18 @@ export default function App() {
                     <Eye size={12} /> {state?.spectators ?? 0}/
                     {LIMITS.spectators}
                   </span>
+                  <div className="reaction-dock" role="group" aria-label="Send a table reaction">
+                    {REACTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        disabled={!connected || state?.spectator}
+                        onClick={() => void act("reaction", { emoji })}
+                        aria-label={`Send ${emoji} reaction`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                   <span />{" "}
                   <button
                     className="icon-button"
@@ -972,6 +1045,7 @@ export default function App() {
                 }
               >
                 <div className="table-ambient" />
+                {state && <ReactionBursts reactions={reactions} state={state} />}
                 {state && state.phase !== "lobby" && (
                   <div className="mobile-player-roster" aria-label="Players at the table">
                     <PlayerRoster state={state} seconds={seconds} compact />
@@ -986,6 +1060,12 @@ export default function App() {
                         phase={state.phase}
                       />
                     </Suspense>
+                  )}
+                  {state && ["challenge", "reveal", "resolution"].includes(state.phase) && (
+                    <div className={`phase-moment moment-${state.phase}`} aria-hidden="true">
+                      <span>{state.phase === "challenge" ? "👀" : "💥"}</span>
+                      <span>{state.phase === "challenge" ? "🤫" : "😱"}</span>
+                    </div>
                   )}
                   <div className="table-rail">
                     <div className="table-felt">

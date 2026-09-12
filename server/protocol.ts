@@ -1,4 +1,4 @@
-import { RANKS, type Command, LIMITS } from "../shared/types.js";
+import { RANKS, REACTIONS, type Command, LIMITS } from "../shared/types.js";
 
 const allowed = new Set([
   "create",
@@ -15,6 +15,7 @@ const allowed = new Set([
   "kick",
   "vote-kick",
   "voice",
+  "reaction",
   "leave",
 ]);
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -84,6 +85,8 @@ export function validateCommand(input: unknown): Command {
       (data.speaking !== undefined && typeof data.speaking !== "boolean"))
   )
     throw new Error("Invalid microphone status.");
+  if (type === "reaction" && !REACTIONS.includes(data.emoji as never))
+    throw new Error("Choose a table reaction.");
   if (type === "settings") {
     if (
       data.turnSeconds !== undefined &&

@@ -28,7 +28,16 @@ export const LIMITS = {
   sessions: 10000,
   connections: 2000,
   removalsPerRoom: 100,
+  reactionCooldownMs: 750,
 } as const;
+export const REACTIONS = ["👀", "🤨", "😈", "😂", "🔥", "👏"] as const;
+export type ReactionEmoji = (typeof REACTIONS)[number];
+export interface Reaction {
+  id: string;
+  playerId: string;
+  emoji: ReactionEmoji;
+  at: number;
+}
 export interface KickVote {
   targetId: string;
   startedBy: string;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { Snapshot, Reply, Command, OpenRoom } from "../shared/types";
+import type { Snapshot, Reply, Command, OpenRoom, Reaction } from "../shared/types";
 
 export function useGame(notify: (text: string) => void) {
   const [state, setState] = useState<Snapshot | null>(null);
@@ -8,6 +8,8 @@ export function useGame(notify: (text: string) => void) {
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const reactionTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const socketRef = useRef<Socket | null>(null);
   const currentRef = useRef<Snapshot | null>(null);
   const offset = useRef(0);
@@ -24,7 +26,7 @@ export function useGame(notify: (text: string) => void) {
         return false;
       }
       const command: Command = { id: crypto.randomUUID(), type, payload };
-      if (type !== "voice") setBusy(true);
+      if (type !== "voice" && type !== "reaction") setBusy(true);
       try {
         let result: Reply;
         try {
@@ -44,7 +46,7 @@ export function useGame(notify: (text: string) => void) {
         );
         return false;
       } finally {
-        if (type !== "voice") setBusy(false);
+        if (type !== "voice" && type !== "reaction") setBusy(false);
       }
     },
     [],
@@ -87,6 +89,18 @@ export function useGame(notify: (text: string) => void) {
       currentRef.current = next;
       setState(next);
     });
+    connection.on("reaction", (reaction: Reaction) => {
+      setReactions((current) =>
+        current.some((item) => item.id === reaction.id)
+          ? current
+          : [...current, reaction].slice(-12),
+      );
+      const timer = setTimeout(() => {
+        setReactions((current) => current.filter((item) => item.id !== reaction.id));
+        reactionTimers.current.delete(reaction.id);
+      }, 2600);
+      reactionTimers.current.set(reaction.id, timer);
+    });
     connection.on("left", () => {
       currentRef.current = null;
       setState(null);
@@ -104,8 +118,10 @@ export function useGame(notify: (text: string) => void) {
     return () => {
       connection.removeAllListeners();
       connection.disconnect();
+      reactionTimers.current.forEach((timer) => clearTimeout(timer));
+      reactionTimers.current.clear();
       socketRef.current = null;
     };
   }, [act]);
-  return { state, rooms, connected, busy, socket, act, offset };
+  return { state, rooms, connected, busy, socket, act, offset, reactions };
 }

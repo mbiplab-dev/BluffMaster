@@ -19,9 +19,11 @@ import {
 } from "./engine.js";
 import {
   LIMITS,
+  REACTIONS,
   type Command,
   type Reply,
   type OpenRoom,
+  type ReactionEmoji,
 } from "../shared/types.js";
 import { Storage, type Session } from "./storage.js";
 import { validateCommand } from "./protocol.js";
@@ -230,6 +232,7 @@ io.on("connection", (socket) => {
   }
   let rateStart = Date.now(),
     rateCount = 0;
+  const lastReactionAt = new Map<string, number>();
   socket.on("command", (command: Command, callback: (reply: Reply) => void) => {
     const ack = typeof callback === "function" ? callback : () => {};
     if (Date.now() - rateStart > 1000) {
@@ -443,6 +446,20 @@ io.on("connection", (socket) => {
             p!.muted = data.muted !== false;
             p!.speaking = !p!.muted && data.speaking === true;
             break;
+          case "reaction": {
+            const at = Date.now();
+            const previous = lastReactionAt.get(s.id) ?? 0;
+            if (at - previous < LIMITS.reactionCooldownMs)
+              throw new Error("Give the table a moment before another reaction.");
+            const emoji = data.emoji as ReactionEmoji;
+            if (!REACTIONS.includes(emoji)) throw new Error("Choose a table reaction.");
+            lastReactionAt.set(s.id, at);
+            const reaction = { id: randomUUID(), playerId: s.id, emoji, at };
+            for (const member of sessions.values())
+              if (member.roomCode === room.code && member.socketId)
+                io.to(member.socketId).emit("reaction", reaction);
+            break;
+          }
           case "leave":
             leave(s, true);
             socket.emit("left");
