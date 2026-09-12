@@ -72,7 +72,7 @@ export function validateCommand(input: unknown): Command {
       data.ids.some((id) => !text(id, 80)) ||
       !RANKS.includes(data.rank as never))
   )
-    throw new Error("Select 1–4 cards and a valid rank.");
+    throw new Error("Select 1–52 cards and a valid rank.");
   if (
     ["kick", "vote-kick"].includes(type) &&
     !text(type === "kick" ? data.playerId : data.targetId, 80)
@@ -97,6 +97,7 @@ export function validateCommand(input: unknown): Command {
       throw new Error("Invalid challenge duration.");
     if (
       data.rankMode !== undefined &&
+      data.rankMode !== "round" &&
       data.rankMode !== "free" &&
       data.rankMode !== "ascending"
     )

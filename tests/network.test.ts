@@ -148,6 +148,54 @@ for (let count = 2; count <= 8; count++) {
     group.forEach((c) => c.socket.disconnect());
   });
 }
+test("live rounds lock ranks, rotate starters, and restore challenge-winner control on reconnect", async () => {
+  const group = await Promise.all(Array.from({ length: 4 }, () => connect()));
+  const [a, b, c, d] = group;
+  await a.act("create", { name: "A" });
+  const code = a.state().code;
+  for (const client of [b, c, d]) {
+    await client.act("join", { code });
+    await client.act("ready");
+  }
+  await a.act("start");
+  await a.wait((s) => s.phase === "turn");
+  const cards = a.state().hand.slice(0, 5);
+  assert.equal(
+    (await a.act("play", { ids: cards.map((c) => c.id), rank: "5" })).ok,
+    true,
+  );
+  for (const client of [b, c, d]) await client.act("accept");
+  await b.wait((s) => s.phase === "turn");
+  assert.equal(b.state().roundRank, "5");
+  assert.equal(b.state().turnsTaken, 1);
+  assert.equal(
+    (await b.act("play", { ids: [b.state().hand[0].id], rank: "K" })).ok,
+    false,
+  );
+  for (const client of [b, c, d])
+    assert.equal((await client.act("pass")).ok, true);
+  await b.wait((s) => s.round === 2);
+  assert.equal(b.state().turnId, b.identity.selfId);
+  assert.equal(b.state().roundStarterId, b.identity.selfId);
+  assert.equal(b.state().roundRank, null);
+  const card = b.state().hand[0];
+  await b.act("play", { ids: [card.id], rank: card.rank === "Q" ? "K" : "Q" });
+  await d.act("bluff");
+  await d.wait((s) => s.phase === "reveal");
+  assert.equal(d.state().reveal!.cards.length, 1);
+  assert.equal(d.state().reveal!.pileCount, 6);
+  await d.wait((s) => s.phase === "turn" && s.round === 3);
+  assert.equal(d.state().turnId, d.identity.selfId);
+  assert.equal(d.state().roundRank, null);
+  b.socket.disconnect();
+  const resumed = await connect(b.identity.token);
+  await resumed.wait((s) => s.round === 3);
+  assert.equal(resumed.state().roundStarterId, d.identity.selfId);
+  assert.equal(resumed.state().turnsTaken, 0);
+  assert.equal(resumed.state().pileCount, 0);
+  [...group, resumed].forEach((client) => client.socket.disconnect());
+});
+
 test("browser connections reject foreign origins and accept the same host", async () => {
   const foreign = io(url, {
     autoConnect: false,

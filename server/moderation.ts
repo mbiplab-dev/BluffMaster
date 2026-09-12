@@ -54,6 +54,8 @@ export function voteToKick(
     log(
       room,
       `${voter.name} started a vote to remove ${target.name}. ${room.kickVote.required} votes required.`,
+      "info",
+      voter,
     );
   }
   const vote = room.kickVote;
@@ -85,6 +87,8 @@ export function voteToKick(
     if (room.lastPlay?.playerId === targetId)
       room.lastPlay.playerId = replacementId;
     if (room.reveal) {
+      if (room.reveal.winnerId === targetId)
+        room.reveal.winnerId = replacementId;
       if (room.reveal.callerId === targetId)
         room.reveal.callerId = replacementId;
       if (room.reveal.loserId === targetId) room.reveal.loserId = replacementId;
@@ -95,6 +99,12 @@ export function voteToKick(
   log(
     room,
     `${target.name.replace(" · Auto", "")} was removed by the table's vote.`,
+    "info",
+    {
+      id: targetId,
+      name: target.name.replace(" · Auto", ""),
+      avatar: target.avatar,
+    },
   );
   return targetId;
 }

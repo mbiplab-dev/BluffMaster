@@ -19,6 +19,7 @@ import { RANKS, type Card } from "../shared/types.js";
 
 function game(count = 4): Room {
   const room = createRoom("TEST01", player("host", "Host"));
+  room.settings.rankMode = "free";
   for (let i = 1; i < count; i++) {
     const p = player(`p${i}`, `Player ${i}`);
     p.ready = true;
@@ -106,7 +107,7 @@ test("rejects unauthorized starts, unready rooms, invalid and duplicated cards, 
       playCards(
         room,
         "host",
-        p.hand.slice(0, 5).map((c) => c.id),
+        Array.from({ length: 53 }, () => randomUUID()),
         "K",
       ),
     /Select/,
@@ -191,6 +192,11 @@ test("last-card win waits for the full challenge window", () => {
   assert.equal(room.winnerId, "host");
   assert.equal(room.phase, "winner");
   assert.equal(countCards(room), 52);
+  assert.ok(room.players.every((player) => !player.ready));
+  room.players.forEach((player) => (player.ready = true));
+  startGame(room, "host", 13000);
+  assert.equal(room.phase, "dealing");
+  assert.ok(room.players.every((player) => !player.ready));
 });
 test("last-card lie loses and prevents a premature winner", () => {
   const room = lastCardGame();

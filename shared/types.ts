@@ -17,7 +17,7 @@ export type Rank = (typeof RANKS)[number];
 export const LIMITS = {
   players: 8,
   spectators: 8,
-  cardsPerPlay: 4,
+  cardsPerPlay: 52,
   voteSeconds: 30,
   voteCooldownSeconds: 60,
   commandsPerSecond: 30,
@@ -66,6 +66,7 @@ export interface Activity {
   text: string;
   kind: "play" | "bluff" | "info" | "win";
   at: number;
+  actor?: { id: string; name: string; avatar: number };
 }
 export interface Claim {
   playerId: string;
@@ -78,6 +79,7 @@ export interface Reveal {
   liar: boolean;
   callerId: string;
   loserId: string;
+  winnerId: string;
   pileCount: number;
 }
 export interface LastPlay {
@@ -89,7 +91,7 @@ export interface LastPlay {
 export interface Settings {
   turnSeconds: number;
   challengeSeconds: number;
-  rankMode: "free" | "ascending";
+  rankMode: "round" | "free" | "ascending";
 }
 export interface Snapshot {
   code: string;
@@ -105,6 +107,9 @@ export interface Snapshot {
   phase: Phase;
   turnId: string;
   round: number;
+  roundStarterId: string;
+  roundRank: Rank | null;
+  turnsTaken: number;
   pileCount: number;
   claim: Claim | null;
   lastPlay: LastPlay | null;

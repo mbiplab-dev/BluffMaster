@@ -1,6 +1,8 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { playFlavor } from "./commentary.js";
 import {
   RANKS,
+  LIMITS,
   rankName,
   type Card,
   type Phase,
@@ -28,6 +30,9 @@ export interface Room {
   phase: Phase;
   turnIndex: number;
   round: number;
+  roundStarterIndex: number;
+  roundRank: Rank | null;
+  turnsTaken: number;
   pile: Card[];
   claim: (Claim & { cards: Card[] }) | null;
   lastPlay: Snapshot["lastPlay"];
@@ -77,6 +82,9 @@ export function createRoom(
     phase: "lobby",
     turnIndex: 0,
     round: 1,
+    roundStarterIndex: 0,
+    roundRank: null,
+    turnsTaken: 0,
     pile: [],
     claim: null,
     lastPlay: null,
@@ -86,14 +94,31 @@ export function createRoom(
     reveal: null,
     winnerId: null,
     deadline: 0,
-    settings: { turnSeconds: 30, challengeSeconds: 8, rankMode: "free" },
+    settings: { turnSeconds: 30, challengeSeconds: 8, rankMode: "round" },
     requiredRank: "A",
     activity: [],
     touchedAt: Date.now(),
   };
 }
-export function log(room: Room, text: string, kind: Activity["kind"] = "info") {
-  room.activity.push({ id: randomUUID(), text, kind, at: Date.now() });
+export function log(
+  room: Room,
+  text: string,
+  kind: Activity["kind"] = "info",
+  actor?: string | Pick<Player, "id" | "name" | "avatar">,
+) {
+  const person =
+    typeof actor === "string"
+      ? room.players.find((p) => p.id === actor)
+      : actor;
+  room.activity.push({
+    id: randomUUID(),
+    text,
+    kind,
+    at: Date.now(),
+    ...(person
+      ? { actor: { id: person.id, name: person.name, avatar: person.avatar } }
+      : {}),
+  });
   room.activity = room.activity.slice(-30);
 }
 export function deck(): Card[] {
@@ -127,8 +152,12 @@ export function startGame(room: Room, actor: string, now = Date.now()) {
     room.players.every((p) => p.connected && (p.id === actor || p.ready)),
     "Wait for every player to be connected and ready.",
   );
+  if (room.practice) room.settings.rankMode = "round";
   room.players.forEach((p) => {
     p.hand = [];
+    // Readiness belongs to the lobby/rematch vote, never to the live deal.
+    // `win()` creates the next vote afresh after this game ends.
+    p.ready = false;
   });
   deck().forEach((c, i) => room.players[i % room.players.length].hand.push(c));
   room.players.forEach((p) =>
@@ -143,6 +172,9 @@ export function startGame(room: Room, actor: string, now = Date.now()) {
     winnerId: null,
     turnIndex: 0,
     round: 1,
+    roundStarterIndex: 0,
+    roundRank: null,
+    turnsTaken: 0,
     requiredRank: "A",
     deadline: now + 2200,
   });
@@ -155,10 +187,35 @@ function beginTurn(room: Room, now: number) {
   room.deadline = now + room.settings.turnSeconds * 1000;
 }
 function advance(room: Room, now: number) {
+  if (room.settings.rankMode === "round") {
+    room.turnsTaken++;
+    if (room.turnsTaken >= room.players.length) {
+      beginRound(room, (room.roundStarterIndex + 1) % room.players.length, now);
+      return;
+    }
+    room.turnIndex =
+      (room.roundStarterIndex + room.turnsTaken) % room.players.length;
+    beginTurn(room, now);
+    return;
+  }
   room.turnIndex = (room.turnIndex + 1) % room.players.length;
   if (room.turnIndex === 0) room.round++;
   if (room.settings.rankMode === "ascending")
     room.requiredRank = RANKS[(RANKS.indexOf(room.requiredRank) + 1) % 13];
+  beginTurn(room, now);
+}
+function beginRound(room: Room, starterIndex: number, now: number) {
+  room.round++;
+  room.roundStarterIndex = starterIndex;
+  room.turnIndex = starterIndex;
+  room.turnsTaken = 0;
+  room.roundRank = null;
+  log(
+    room,
+    `Round ${room.round}: ${room.players[starterIndex].name} starts and chooses the next rank.`,
+    "info",
+    room.players[starterIndex],
+  );
   beginTurn(room, now);
 }
 function win(room: Room, id: string) {
@@ -166,12 +223,15 @@ function win(room: Room, id: string) {
   room.winnerId = id;
   room.deadline = 0;
   room.players.forEach((p) => {
-    p.ready = p.bot || p.id === room.hostId;
+    // A rematch is an explicit vote from every human at the table. Practice
+    // opponents are always prepared, but the host must opt in too.
+    p.ready = p.bot;
   });
   log(
     room,
     `${room.players.find((p) => p.id === id)?.name} takes the crown. Well played.`,
     "win",
+    id,
   );
 }
 export function playCards(
@@ -186,21 +246,29 @@ export function playCards(
   requireRule(p.id === actor, "It is not your turn.");
   requireRule(RANKS.includes(rank as Rank), "Choose a valid rank.");
   requireRule(
+    room.settings.rankMode !== "round" ||
+      room.roundRank === null ||
+      rank === room.roundRank,
+    `This round is locked to ${room.roundRank ? rankName(room.roundRank) : "its opening rank"}. Play that rank or pass.`,
+  );
+  requireRule(
     room.settings.rankMode !== "ascending" || rank === room.requiredRank,
     `Claim ${rankName(room.requiredRank)} this turn.`,
   );
   requireRule(
     Array.isArray(ids) &&
       ids.length >= 1 &&
-      ids.length <= 4 &&
+      ids.length <= LIMITS.cardsPerPlay &&
       new Set(ids).size === ids.length,
-    "Select 1–4 different cards.",
+    "Select 1–52 different cards from your hand.",
   );
   requireRule(
     ids.every((id) => p.hand.some((c) => c.id === id)),
     "You can only play cards in your hand.",
   );
   const cards = p.hand.filter((c) => ids.includes(c.id));
+  if (room.settings.rankMode === "round" && room.roundRank === null)
+    room.roundRank = rank as Rank;
   p.hand = p.hand.filter((c) => !ids.includes(c.id));
   room.pile.push(...cards);
   room.claim = {
@@ -220,8 +288,9 @@ export function playCards(
   room.deadline = now + room.settings.challengeSeconds * 1000;
   log(
     room,
-    `${p.name} played ${cards.length} ${rankName(rank as Rank, cards.length)}. Or did they?`,
+    `${p.name} played ${cards.length} ${rankName(rank as Rank, cards.length)}. ${playFlavor(room.activity.filter((event) => event.kind === "play").at(-1)?.text)}`,
     "play",
+    p,
   );
 }
 function finishClaim(room: Room, now: number) {
@@ -267,6 +336,7 @@ export function callBluff(room: Room, actor: string, now = Date.now()) {
     liar,
     callerId: actor,
     loserId: liar ? room.claim.playerId : actor,
+    winnerId: liar ? actor : room.claim.playerId,
     pileCount: room.pile.length,
   };
   room.phase = "reveal";
@@ -275,6 +345,7 @@ export function callBluff(room: Room, actor: string, now = Date.now()) {
     room,
     `${room.players.find((p) => p.id === actor)?.name} called BLUFF! ${liar ? "Caught lying." : "The claim was true."}`,
     "bluff",
+    actor,
   );
 }
 export function passTurn(room: Room, actor: string, now = Date.now()) {
@@ -282,7 +353,7 @@ export function passTurn(room: Room, actor: string, now = Date.now()) {
     room.phase === "turn" && room.players[room.turnIndex].id === actor,
     "It is not your turn.",
   );
-  log(room, `${room.players[room.turnIndex].name} passed.`);
+  log(room, `${room.players[room.turnIndex].name} passed.`, "info", actor);
   advance(room, now);
 }
 export function tick(room: Room, now = Date.now()): boolean {
@@ -292,20 +363,33 @@ export function tick(room: Room, now = Date.now()): boolean {
     log(
       room,
       `${room.players[room.turnIndex].name} ran out of time. Turn passed.`,
+      "info",
+      room.players[room.turnIndex],
     );
     advance(room, now);
   } else if (room.phase === "challenge") finishClaim(room, now);
   else if (room.phase === "reveal") {
     const loser = room.players.find((p) => p.id === room.reveal!.loserId)!;
-    loser.hand.push(...room.pile);
+    // Newly collected cards are the first visible cards, not hidden on a later hand page.
+    loser.hand.unshift(...room.pile);
     room.pile = [];
-    log(room, `${loser.name} picks up ${room.reveal!.pileCount} cards.`);
+    log(
+      room,
+      `${loser.name} picks up ${room.reveal!.pileCount} cards.`,
+      "info",
+      loser,
+    );
     room.phase = "resolution";
-    room.deadline = now + 1100;
+    room.deadline = now + Math.max(1100, 800 + room.reveal!.pileCount * 25);
   } else if (room.phase === "resolution") {
     const empty = room.players.find((p) => p.hand.length === 0);
     if (empty) win(room, empty.id);
-    else advance(room, now);
+    else if (room.settings.rankMode === "round") {
+      const starter = room.players.findIndex(
+        (p) => p.id === room.reveal!.winnerId,
+      );
+      beginRound(room, starter, now);
+    } else advance(room, now);
   } else return false;
   return true;
 }
@@ -327,6 +411,9 @@ export function snapshot(room: Room, selfId: string): Snapshot {
     phase: room.phase,
     turnId: room.players[room.turnIndex]?.id ?? "",
     round: room.round,
+    roundStarterId: room.players[room.roundStarterIndex]?.id ?? "",
+    roundRank: room.roundRank,
+    turnsTaken: room.turnsTaken,
     pileCount: room.pile.length,
     lastPlay: room.lastPlay ?? null,
     kickVote: room.kickVote ?? null,
@@ -353,9 +440,11 @@ export function botAct(room: Room, now = Date.now()): boolean {
     const p = room.players[room.turnIndex];
     if (!p.bot) return false;
     const rank =
-      room.settings.rankMode === "ascending"
-        ? room.requiredRank
-        : p.hand[randomInt(p.hand.length)].rank;
+      room.settings.rankMode === "round" && room.roundRank
+        ? room.roundRank
+        : room.settings.rankMode === "ascending"
+          ? room.requiredRank
+          : p.hand[randomInt(p.hand.length)].rank;
     const honest = p.hand.filter((c) => c.rank === rank).slice(0, 3);
     const cards =
       honest.length && randomInt(10) > 2

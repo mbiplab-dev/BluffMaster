@@ -36,10 +36,36 @@ export class Storage {
       // Their sessions retain roomCode and can reclaim a slot on reconnect.
       const room: Room = { ...data, spectators: new Set() };
       room.visibility ??= "private";
+      if (
+        room.roundStarterIndex === undefined ||
+        (room.practice && room.settings.rankMode !== "round")
+      ) {
+        // Upgrade pre-round games at their current seat without redealing private hands.
+        room.settings.rankMode = "round";
+        room.roundStarterIndex = room.turnIndex;
+        room.turnsTaken = 0;
+        room.roundRank = room.claim?.rank ?? null;
+      }
+      if (room.reveal && !room.reveal.winnerId)
+        room.reveal.winnerId = room.reveal.liar
+          ? room.reveal.callerId
+          : room.claim!.playerId;
       room.lastPlay ??= null;
       room.kickVote ??= null;
       room.blockedPlayerIds ??= [];
       room.voteCooldowns ??= {};
+      for (const event of room.activity) {
+        if (event.actor) continue;
+        const person = room.players.find((p) =>
+          event.text.startsWith(`${p.name} `),
+        );
+        if (person)
+          event.actor = {
+            id: person.id,
+            name: person.name,
+            avatar: person.avatar,
+          };
+      }
       room.players.forEach((p) => {
         if (!p.bot) {
           p.connected = false;

@@ -53,7 +53,7 @@ export function CardFlights({
         ? 52
         : state.phase === "challenge"
           ? (state.claim?.count ?? 1)
-          : Math.min(10, state.reveal?.pileCount ?? 1);
+          : (state.reveal?.pileCount ?? 1);
     setFlights(
       Array.from({ length: count }, (_, i) => {
         const targetId =
@@ -62,21 +62,48 @@ export function CardFlights({
             : state.phase === "resolution"
               ? state.reveal!.loserId
               : "pile";
+        let target = targetId === "pile" ? pile : seat(targetId);
+        let endScale =
+          targetId === state.selfId || targetId === "pile" ? 0.9 : 0.38;
+        if (state.phase === "resolution") {
+          if (targetId === state.selfId) {
+            const visible = [
+              ...panel.querySelectorAll<HTMLElement>(
+                ".hand-card:not([hidden])",
+              ),
+            ];
+            const card = visible[Math.min(i, visible.length - 1)];
+            if (card) {
+              target = center(card);
+              endScale = card.getBoundingClientRect().width / 66;
+            }
+          } else
+            target = { x: target.x + Math.min(i, 7) * 3 - 10, y: target.y };
+        }
         return {
           id: `${state.deadline}-${i}`,
           to: targetId,
           from:
             state.phase === "challenge" ? seat(state.claim!.playerId) : pile,
-          target: targetId === "pile" ? pile : seat(targetId),
-          delay: i * (state.phase === "dealing" ? 0.026 : 0.035),
-          endScale:
-            targetId === state.selfId || targetId === "pile" ? 0.9 : 0.38,
+          target,
+          delay:
+            i *
+            (state.phase === "dealing"
+              ? 0.026
+              : state.phase === "resolution"
+                ? 0.025
+                : Math.min(0.035, 0.35 / count)),
+          endScale,
         };
       }),
     );
     const timeout = window.setTimeout(
       () => setFlights([]),
-      state.phase === "dealing" ? 2050 : 1050,
+      state.phase === "dealing"
+        ? 2050
+        : state.phase === "resolution"
+          ? Math.max(1050, 650 + count * 25)
+          : 1050,
     );
     return () => clearTimeout(timeout);
   }, [state.code, state.phase, state.deadline, root]);

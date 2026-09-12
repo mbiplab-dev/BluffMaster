@@ -1,16 +1,5 @@
 import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-  type ReactNode,
-} from "react";
-import {
-  ArrowDown,
   ArrowRight,
-  AudioLines,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -19,7 +8,6 @@ import {
   Copy,
   Crown,
   DoorOpen,
-  Expand,
   Eye,
   Flag,
   Headphones,
@@ -31,14 +19,12 @@ import {
   LogIn,
   Menu,
   Mic,
-  MicOff,
   MoreHorizontal,
   Plus,
-  RotateCcw,
   Settings2,
   ShieldCheck,
-  Sparkles,
   Spade,
+  Sparkles,
   Users,
   Volume2,
   VolumeX,
@@ -47,30 +33,96 @@ import {
   X,
 } from "lucide-react";
 import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
   LIMITS,
-  RANKS,
   rankName,
+  RANKS,
   type Rank,
   type Snapshot,
 } from "../shared/types";
-import { Avatar, AVATARS, CardBack, CardFace, PlayerSeat } from "./components";
-import { useGame } from "./useGame";
 import { playSound, soundEnabled, unlockAudio } from "./audio";
-import { useSpeech, useVoiceChat } from "./useVoice";
-import { layoutHand } from "./handLayout";
 import { CardFlights } from "./CardFlights";
+import { Avatar, AVATARS, CardBack, CardFace, PlayerSeat } from "./components";
+import { layoutHand } from "./handLayout";
+import { useGame } from "./useGame";
+import { useTableCenter } from "./useTableCenter";
+import { useSpeech, useVoiceChat } from "./useVoice";
 
 type Modal =
   | "create"
   | "join"
   | "rooms"
   | "players"
+  | "reveal"
   | "rules"
   | "settings"
   | "invite"
   | "leave"
   | null;
 const emptyPlayers: Snapshot["players"] = [];
+
+function PlayerRoster({
+  state,
+  seconds,
+  compact = false,
+}: {
+  state: Snapshot;
+  seconds: number;
+  compact?: boolean;
+}) {
+  const duration =
+    state.phase === "challenge"
+      ? state.settings.challengeSeconds
+      : state.settings.turnSeconds;
+  const timingTurn = state.phase === "turn" && Boolean(state.deadline);
+  const progress = timingTurn
+    ? Math.max(0, Math.min(100, (seconds / duration) * 100))
+    : 0;
+  return (
+    <div className={`player-roster ${compact ? "player-roster-compact" : ""}`}>
+      {state.players.map((player) => {
+        const active = timingTurn && player.id === state.turnId;
+        return (
+          <div
+            className={`roster-player ${active ? "roster-player-active" : ""} ${!player.connected ? "roster-player-offline" : ""}`}
+            key={player.id}
+            aria-label={`${player.id === state.selfId ? "You" : player.name}, ${player.count} cards${active ? `, ${seconds} seconds remaining` : ""}`}
+          >
+            <span
+              className={`roster-avatar-ring ${active ? "timer-running" : ""}`}
+              style={{ "--timer-progress": `${active ? progress : 0}%` } as CSSProperties}
+            >
+              <Avatar index={player.avatar} />
+            </span>
+            {!compact && (
+              <span className="roster-player-copy">
+                <strong>{player.id === state.selfId ? "You" : player.name}</strong>
+                <small>
+                  {active
+                    ? `${seconds}s · YOUR TURN`
+                    : !player.connected
+                      ? "Reconnecting"
+                      : `${player.count} cards`}
+                </small>
+              </span>
+            )}
+            <span className={`roster-mic ${player.muted ? "roster-mic-muted" : ""}`}>
+              {!player.connected ? <WifiOff size={11} /> : <Mic size={11} />}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function App() {
   const [toast, setToast] = useState("");
@@ -90,7 +142,9 @@ export default function App() {
   );
   const [mobileNav, setMobileNav] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [receivedIds, setReceivedIds] = useState<string[]>([]);
   const [rank, setRank] = useState<Rank>("A");
+  const [lastReveal, setLastReveal] = useState<Snapshot["reveal"]>(null);
   const [now, setNow] = useState(Date.now());
   const [sound, setSound] = useState(
     localStorage.getItem("bluff-sound") !== "false",
@@ -106,6 +160,13 @@ export default function App() {
   const [tableHeight, setTableHeight] = useState(300);
   const [tableWidth, setTableWidth] = useState(600);
   const tableRef = useRef<HTMLDivElement>(null);
+  useTableCenter(
+    tableRef,
+    tableWidth,
+    tableHeight,
+    state?.phase ?? "loading",
+    state?.players.map((p) => `${p.id}:${p.name}`).join(",") ?? "",
+  );
   const handRef = useRef<HTMLDivElement>(null);
   const activityRef = useRef<HTMLDivElement>(null);
   const previous = useRef<Snapshot | null>(null);
@@ -121,6 +182,12 @@ export default function App() {
     !state.spectator &&
     !state.claim?.accepted.includes(state.selfId);
   const me = state?.players.find((p) => p.id === state.selfId);
+  const roundMode = state?.settings.rankMode === "round";
+  const lockedRank = roundMode
+    ? state?.roundRank
+    : state?.settings.rankMode === "ascending"
+      ? state.requiredRank
+      : null;
   const active = state?.players.find((p) => p.id === state.turnId);
   const claimPlayer = state?.players.find(
     (p) => p.id === state.claim?.playerId,
@@ -159,9 +226,26 @@ export default function App() {
         notify("Wait for your turn to play cards.");
         return;
       }
-      const word = command.match(/\b(one|two|three|four|[1-4])\b/)?.[1];
+      const word = command.match(
+        /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\b/,
+      )?.[1];
       const count = word
-        ? { one: 1, two: 2, three: 3, four: 4 }[word] || Number(word)
+        ? (
+            {
+              one: 1,
+              two: 2,
+              three: 3,
+              four: 4,
+              five: 5,
+              six: 6,
+              seven: 7,
+              eight: 8,
+              nine: 9,
+              ten: 10,
+              eleven: 11,
+              twelve: 12,
+            } as Record<string, number>
+          )[word] || Number(word)
         : selected.length;
       if (!selected.length || count !== selected.length)
         notify(`Select ${count || "your"} cards first, then say “Play cards”.`);
@@ -209,12 +293,9 @@ export default function App() {
         )
         .find(Boolean);
       if (found && isTurn) {
-        if (
-          state?.settings.rankMode === "ascending" &&
-          found !== state.requiredRank
-        )
+        if (lockedRank && found !== lockedRank)
           notify(
-            `This table requires ${rankName(state.requiredRank)} this turn.`,
+            `This round requires ${rankName(lockedRank)}. Play that rank or pass.`,
           );
         else {
           setRank(found);
@@ -265,8 +346,31 @@ export default function App() {
     if (prev?.code !== state.code) {
       setSelected([]);
       setHandPage(0);
+      setReceivedIds([]);
       setRank("A");
     }
+    if (
+      prev?.code === state.code &&
+      state.hand.length > prev.hand.length &&
+      state.phase === "resolution"
+    ) {
+      const oldIds = new Set(prev.hand.map((card) => card.id));
+      const received = state.hand
+        .filter((card) => !oldIds.has(card.id))
+        .map((card) => card.id);
+      setReceivedIds(received);
+      setHandPage(0);
+      notify(`${received.length} cards added to the front of your hand.`);
+    }
+    if (
+      prev?.code === state.code &&
+      state.round !== prev.round &&
+      state.settings.rankMode === "round"
+    )
+      notify(
+        `Round ${state.round}: ${state.players.find((p) => p.id === state.roundStarterId)?.name} starts. Choose a new rank.`,
+      );
+    if (state.phase === "dealing") setReceivedIds([]);
     if (prev?.deadline !== state.deadline || prev?.phase !== state.phase) {
       if (state.phase === "challenge") {
         playSound("card");
@@ -285,6 +389,11 @@ export default function App() {
     )
       playSound(state.players.length > prev.players.length ? "join" : "leave");
     if (state.settings.rankMode === "ascending") setRank(state.requiredRank);
+    if (state.settings.rankMode === "round" && state.roundRank)
+      setRank(state.roundRank);
+    if (state.reveal) setLastReveal(state.reveal);
+    if (prev?.code !== state.code || state.phase === "dealing")
+      setLastReveal(null);
     previous.current = state;
   }, [state]);
   useEffect(() => {
@@ -349,8 +458,8 @@ export default function App() {
   const toggleCard = (id: string) => {
     if (!isTurn || busy || !connected) return;
     if (selected.includes(id)) setSelected(selected.filter((c) => c !== id));
-    else if (selected.length >= 4)
-      notify("You can play up to four cards at a time.");
+    else if (selected.length >= LIMITS.cardsPerPlay)
+      notify("You can only select cards in your hand.");
     else setSelected([...selected, id]);
     playSound("select");
   };
@@ -380,7 +489,9 @@ export default function App() {
     1,
     Math.ceil((state?.hand.length ?? 0) / pageSize),
   );
-  const currentPage = Math.min(handPage, pageCount - 1);
+  const collecting =
+    state?.phase === "resolution" && state.reveal?.loserId === state.selfId;
+  const currentPage = collecting ? 0 : Math.min(handPage, pageCount - 1);
   const pageStart = currentPage * pageSize;
   const visibleHand = state?.hand.slice(pageStart, pageStart + pageSize) ?? [];
   const handLayout = layoutHand(
@@ -395,7 +506,14 @@ export default function App() {
   const lastPlayer = state?.players.find((p) => p.id === lastPlay?.playerId);
   const nextPlayer =
     state?.players[
-      (state.players.findIndex((p) => p.id === state.turnId) + 1) %
+      (state.players.findIndex(
+        (p) =>
+          p.id ===
+          (roundMode && state.turnsTaken === state.players.length - 1
+            ? state.roundStarterId
+            : state.turnId),
+      ) +
+        1) %
         state.players.length
     ];
   const phaseTitle = !state
@@ -496,6 +614,15 @@ export default function App() {
           >
             <LogIn size={18} /> Join friends
           </button>
+          <button
+            className="nav-item"
+            onClick={() => {
+              setModal("players");
+              setMobileNav(false);
+            }}
+          >
+            <Flag size={18} /> Players & vote kick
+          </button>
         </nav>
         <div className="sidebar-rule" />
         <nav aria-label="Help and preferences">
@@ -573,6 +700,16 @@ export default function App() {
           </div>
           <div className="topbar-actions">
             <button
+              className={`icon-button voice-command-button ${speech.listening ? "voice-listening" : ""}`}
+              aria-label={
+                speech.listening ? "Stop listening" : "Try voice commands"
+              }
+              title={speech.listening ? "Listening…" : "Voice commands"}
+              onClick={speech.listening ? speech.stop : speech.start}
+            >
+              <Mic size={16} />
+            </button>
+            <button
               className="topbar-rooms"
               onClick={() => setModal("rooms")}
               aria-label="Browse rooms"
@@ -649,7 +786,7 @@ export default function App() {
                   </strong>
                   <span className="table-type">
                     {state?.practice
-                      ? "PRACTICE"
+                      ? "ROUND BLUFF"
                       : state?.visibility === "public"
                         ? "OPEN ROOM"
                         : "INVITE ONLY"}
@@ -694,7 +831,11 @@ export default function App() {
               >
                 <div className="status-turn">
                   <span className="status-label">
-                    {state?.phase === "turn" ? "CURRENT TURN" : "RIGHT NOW"}
+                    {roundMode && state?.phase !== "lobby"
+                      ? `ROUND ${state?.round} · ${state?.roundRank ? `${rankName(state.roundRank)} LOCKED` : "CHOOSE A RANK"}`
+                      : state?.phase === "turn"
+                        ? "CURRENT TURN"
+                        : "RIGHT NOW"}
                   </span>
                   <strong>{phaseTitle}</strong>
                   <span>
@@ -705,7 +846,7 @@ export default function App() {
                           ? "Other players are deciding"
                           : "You accepted this claim"
                       : state?.phase === "turn"
-                        ? `Up next: ${nextPlayer?.id === state.selfId ? "You" : nextPlayer?.name}`
+                        ? `${roundMode && state.turnsTaken === state.players.length - 1 ? "Next round" : "Up next"}: ${nextPlayer?.id === state.selfId ? "You" : nextPlayer?.name}`
                         : state?.phase === "lobby"
                           ? "Ready up to start the game"
                           : "Watch the center of the table"}
@@ -826,6 +967,11 @@ export default function App() {
                 }
               >
                 <div className="table-ambient" />
+                {state && state.phase !== "lobby" && (
+                  <div className="mobile-player-roster" aria-label="Players at the table">
+                    <PlayerRoster state={state} seconds={seconds} compact />
+                  </div>
+                )}
                 <div className="table-physical">
                   <div className="table-rail">
                     <div className="table-felt">
@@ -981,15 +1127,17 @@ export default function App() {
                             {state.phase === "reveal" ||
                             state.phase === "resolution" ? (
                               <div className="revealed-cards">
-                                {state.reveal?.cards.map((card, i) => (
-                                  <div
-                                    className="reveal-card"
-                                    key={card.id}
-                                    style={{ animationDelay: `${i * 0.12}s` }}
-                                  >
-                                    <CardFace card={card} small />
-                                  </div>
-                                ))}
+                                {state.reveal?.cards
+                                  .slice(0, 4)
+                                  .map((card, i) => (
+                                    <div
+                                      className="reveal-card"
+                                      key={card.id}
+                                      style={{ animationDelay: `${i * 0.12}s` }}
+                                    >
+                                      <CardFace card={card} small />
+                                    </div>
+                                  ))}
                               </div>
                             ) : (
                               <>
@@ -1015,7 +1163,12 @@ export default function App() {
                                 <CardBack className="pile-card pile-one" />
                                 <CardBack className="pile-card pile-two" />
                                 {Array.from(
-                                  { length: state.claim?.count ?? 1 },
+                                  {
+                                    length: Math.min(
+                                      4,
+                                      state.claim?.count ?? 1,
+                                    ),
+                                  },
                                   (_, i) => (
                                     <CardBack
                                       key={`played-${i}`}
@@ -1042,12 +1195,16 @@ export default function App() {
                           <div className="center-claim">
                             {state.phase === "challenge" ? (
                               <>
-                                {state.claim?.count}{" "}
-                                {rankName(
-                                  state.claim!.rank,
-                                  state.claim!.count,
-                                )}
-                                <span>Believe it. Or call it.</span>
+                                <span className="claim-speaker">
+                                  {claimPlayer?.id === state.selfId
+                                    ? "You claim"
+                                    : `${claimPlayer?.name} claims`}
+                                </span>
+                                <strong className="claim-description">
+                                  {state.claim?.count}{" "}
+                                  {state.claim?.count === 1 ? "card" : "cards"}{" "}
+                                  of {state.claim?.rank}
+                                </strong>
                               </>
                             ) : state.phase === "reveal" ||
                               state.phase === "resolution" ? (
@@ -1060,6 +1217,25 @@ export default function App() {
                                   }{" "}
                                   takes {state.reveal?.pileCount} cards
                                 </span>
+                                {roundMode && (
+                                  <span>
+                                    {
+                                      state.players.find(
+                                        (p) => p.id === state.reveal?.winnerId,
+                                      )?.name
+                                    }{" "}
+                                    starts the next round
+                                  </span>
+                                )}
+                                {(state.reveal?.cards.length ?? 0) > 4 && (
+                                  <button
+                                    className="reveal-details-button"
+                                    onClick={() => setModal("reveal")}
+                                  >
+                                    View all {state.reveal?.cards.length}{" "}
+                                    revealed cards
+                                  </button>
+                                )}
                               </>
                             ) : (
                               <div className="table-motto">
@@ -1078,7 +1254,7 @@ export default function App() {
                   <span className="mini-dot" />{" "}
                   {state?.phase === "lobby"
                     ? "Waiting for friends"
-                    : `Round ${String(state?.round ?? 1).padStart(2, "0")}`}
+                    : `Round ${String(state?.round ?? 1).padStart(2, "0")}${roundMode ? ` · Turn ${(state?.turnsTaken ?? 0) + 1}/${state?.players.length}` : ""}`}
                 </span>
                 <span>
                   {state?.spectator ? (
@@ -1091,8 +1267,11 @@ export default function App() {
                     </>
                   )}
                 </span>
-                <button onClick={() => setModal("rules")}>
-                  Table rules <ChevronRight size={12} />
+                <button
+                  onClick={() => setModal(lastReveal ? "reveal" : "rules")}
+                >
+                  {lastReveal ? "Last reveal" : "Table rules"}{" "}
+                  <ChevronRight size={12} />
                 </button>
               </div>
 
@@ -1133,15 +1312,25 @@ export default function App() {
                         <ChevronLeft size={15} />
                       </button>
                       <span>
-                        {currentPage + 1} / {pageCount}
+                        <span className="page-card-range">
+                          {pageStart + 1}–
+                          {Math.min(
+                            pageStart + pageSize,
+                            state?.hand.length ?? 0,
+                          )}{" "}
+                          of {state?.hand.length}
+                        </span>
+                        <span className="page-number">
+                          Page {currentPage + 1}/{pageCount}
+                        </span>
                       </span>
                       <button
-                        className="icon-button"
+                        className="icon-button hand-next-button"
                         aria-label="Next cards"
                         disabled={currentPage === pageCount - 1}
                         onClick={() => setHandPage(currentPage + 1)}
                       >
-                        <ChevronRight size={15} />
+                        Next <ChevronRight size={15} />
                       </button>
                     </div>
                   )}
@@ -1166,10 +1355,11 @@ export default function App() {
                           key={card.id}
                           hidden={!position}
                           data-hand-index={i}
-                          className={`hand-card ${selected.includes(card.id) ? "selected-card" : ""}`}
+                          className={`hand-card ${selected.includes(card.id) ? "selected-card" : ""} ${receivedIds.includes(card.id) ? "received-card" : ""} ${collecting && i < (state.reveal?.pileCount ?? 0) ? "card-arriving" : ""}`}
                           style={
                             {
                               "--x": `${position?.x ?? 0}px`,
+                              "--receive-order": i,
                               "--angle": `${position?.angle ?? 0}deg`,
                               "--curve": `${position?.curve ?? 0}px`,
                               "--order": i,
@@ -1184,6 +1374,9 @@ export default function App() {
                           aria-pressed={selected.includes(card.id)}
                         >
                           <CardFace card={card} />
+                          {receivedIds.includes(card.id) && (
+                            <span className="received-badge">NEW</span>
+                          )}
                           {selected.includes(card.id) && (
                             <span className="card-selected-check">
                               <Check size={12} />
@@ -1224,10 +1417,19 @@ export default function App() {
                       <span>
                         {state.players.length < 2
                           ? "Invite at least one friend to get started."
-                          : `${state.players.filter((p) => p.ready || p.id === state.hostId).length} of ${state.players.length} players ready`}
+                          : `${state.players.filter((p) => p.ready || (state.phase === "lobby" && p.id === state.hostId)).length} of ${state.players.length} players ready`}
                       </span>
                     </div>
-                    {state.hostId === state.selfId ? (
+                    {state.phase === "winner" && !state.spectator ? (
+                      <button
+                        className="button primary"
+                        disabled={busy || !connected}
+                        onClick={() => act("ready")}
+                      >
+                        <Check size={16} />
+                        {me?.ready ? "Ready — waiting for the table" : "Ready for the next game"}
+                      </button>
+                    ) : state.hostId === state.selfId ? (
                       <button
                         className="button primary"
                         disabled={
@@ -1242,14 +1444,7 @@ export default function App() {
                         }
                         onClick={() => act("start")}
                       >
-                        {state.phase === "winner" ? (
-                          <RotateCcw size={16} />
-                        ) : (
-                          <Spade size={16} />
-                        )}{" "}
-                        {state.phase === "winner"
-                          ? "Play again"
-                          : "Start the game"}
+                        <Spade size={16} /> Start the game
                       </button>
                     ) : !state.spectator ? (
                       <button
@@ -1270,7 +1465,8 @@ export default function App() {
                       <span className="eyebrow">SOMETHING FEEL OFF?</span>
                       <strong>
                         {claimPlayer?.name} claims {state?.claim?.count}{" "}
-                        {rankName(state!.claim!.rank, state!.claim!.count)}.
+                        {state?.claim?.count === 1 ? "card" : "cards"} of{" "}
+                        {state?.claim?.rank}.
                       </strong>
                       <span>You have {seconds}s to trust your gut.</span>
                     </div>
@@ -1311,7 +1507,9 @@ export default function App() {
                       </span>
                       <span className="action-guidance">
                         {isTurn
-                          ? "Play 1–4 cards and choose your claim."
+                          ? lockedRank
+                            ? `Claim ${rankName(lockedRank)} or pass. Rank is locked.`
+                            : "Play any cards to choose the rank, or pass."
                           : state?.phase === "challenge"
                             ? "The table is considering the claim…"
                             : "Sit tight. Read the room."}
@@ -1341,10 +1539,7 @@ export default function App() {
                             id="rank-picker"
                             value={rank}
                             onChange={(e) => setRank(e.target.value as Rank)}
-                            disabled={
-                              !isTurn ||
-                              state?.settings.rankMode === "ascending"
-                            }
+                            disabled={!isTurn || !!lockedRank}
                           >
                             {RANKS.map((r) => (
                               <option key={r} value={r}>
@@ -1386,22 +1581,6 @@ export default function App() {
                     </div>
                   </>
                 )}
-                <div className="voice-hint">
-                  <Mic size={12} />
-                  <span>
-                    {speech.listening
-                      ? "Listening… say your move."
-                      : speech.transcript
-                        ? `Heard “${speech.transcript}”`
-                        : "Big bluff energy. Hands-free, if you like."}
-                  </span>
-                  <button
-                    onClick={speech.listening ? speech.stop : speech.start}
-                  >
-                    {speech.listening ? "Stop listening" : "Try voice commands"}{" "}
-                    <ArrowRight size={11} />
-                  </button>
-                </div>
               </div>
               {state && <CardFlights state={state} root={gamePanelRef} />}
             </section>
@@ -1466,6 +1645,17 @@ export default function App() {
                 </button>
               </section>
               <section className="voice-card">
+                {state && (
+                  <div className="roster-card">
+                    <div className="rail-section-title">
+                      <h3>Players at the table</h3>
+                      <span className="roster-count">
+                        {state.players.length}/{LIMITS.players}
+                      </span>
+                    </div>
+                    <PlayerRoster state={state} seconds={seconds} />
+                  </div>
+                )}
                 <div className="rail-section-title">
                   <h3>Table talk</h3>
                   <span
@@ -1529,19 +1719,36 @@ export default function App() {
                       className={`activity-event event-${event.kind}`}
                       key={event.id}
                     >
-                      <span className="activity-icon">
-                        {event.kind === "bluff" ? (
-                          <Flag size={13} />
-                        ) : event.kind === "play" ? (
-                          <Layers size={13} />
-                        ) : event.kind === "win" ? (
-                          <Crown size={13} />
-                        ) : (
-                          <Sparkles size={13} />
-                        )}
-                      </span>
+                      {event.actor ? (
+                        <Avatar
+                          index={event.actor.avatar}
+                          className="activity-avatar"
+                        />
+                      ) : (
+                        <span className="activity-icon">
+                          {event.kind === "bluff" ? (
+                            <Flag size={13} />
+                          ) : event.kind === "play" ? (
+                            <Layers size={13} />
+                          ) : event.kind === "win" ? (
+                            <Crown size={13} />
+                          ) : (
+                            <Sparkles size={13} />
+                          )}
+                        </span>
+                      )}
                       <div>
-                        <p>{event.text}</p>
+                        {event.actor && (
+                          <strong className="activity-player-name">
+                            {event.actor.name}
+                          </strong>
+                        )}
+                        <p>
+                          {event.actor &&
+                          event.text.startsWith(`${event.actor.name} `)
+                            ? event.text.slice(event.actor.name.length + 1)
+                            : event.text}
+                        </p>
                         <time>
                           {new Date(event.at).toLocaleTimeString([], {
                             hour: "2-digit",
@@ -1592,26 +1799,45 @@ export default function App() {
       {modal && (
         <Dialog
           title={
-            modal === "players"
-              ? "Who’s at the table?"
-              : modal === "rooms"
-                ? "Find your next table!"
-                : modal === "create"
-                  ? "Make room for a little mischief."
-                  : modal === "join"
-                    ? "Your friends are waiting."
-                    : modal === "rules"
-                      ? "A little lie goes a long way."
-                      : modal === "settings"
-                        ? "Make yourself comfortable."
-                        : modal === "leave"
-                          ? "Leaving so soon?"
-                          : "Good company starts here."
+            modal === "reveal"
+              ? "The revealed cards"
+              : modal === "players"
+                ? "Who’s at the table?"
+                : modal === "rooms"
+                  ? "Find your next table!"
+                  : modal === "create"
+                    ? "Make room for a little mischief."
+                    : modal === "join"
+                      ? "Your friends are waiting."
+                      : modal === "rules"
+                        ? "A little lie goes a long way."
+                        : modal === "settings"
+                          ? "Make yourself comfortable."
+                          : modal === "leave"
+                            ? "Leaving so soon?"
+                            : "Good company starts here."
           }
           onClose={() => setModal(null)}
           notice={toast}
         >
-          {modal === "create" || modal === "join" ? (
+          {modal === "reveal" ? (
+            <>
+              <p className="modal-intro">
+                Only the challenged play is shown. {lastReveal?.cards.length}{" "}
+                cards revealed —{" "}
+                {lastReveal?.liar
+                  ? "the claim was a bluff."
+                  : "every card matched the claim."}
+              </p>
+              <div className="revealed-card-grid">
+                {lastReveal?.cards.map((card) => (
+                  <div key={card.id} aria-label={`${card.rank} ${card.suit}`}>
+                    <CardFace card={card} />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : modal === "create" || modal === "join" ? (
             <RoomForm
               mode={modal}
               initialCode={joinCode}
@@ -1779,10 +2005,11 @@ export default function App() {
                 <li>
                   <span>01</span>
                   <div>
-                    <strong>Play your cards. Tell your story.</strong>
+                    <strong>One rank. One turn each.</strong>
                     <p>
-                      On your turn, select 1–4 cards and claim a rank. They land
-                      face-down. The cards don’t have to match your claim.
+                      The first play locks the round’s rank. Play any number of
+                      cards face-down claiming that rank, or pass. Each player
+                      gets one turn — the starter does not go twice.
                     </p>
                   </div>
                 </li>
@@ -1799,10 +2026,12 @@ export default function App() {
                 <li>
                   <span>03</span>
                   <div>
-                    <strong>The truth has consequences.</strong>
+                    <strong>Win the challenge. Control the next rank.</strong>
                     <p>
                       If any revealed card doesn’t match, the player takes the
                       entire pile. If all cards match, the challenger takes it.
+                      The challenge winner starts a new round and chooses its
+                      rank.
                     </p>
                   </div>
                 </li>
@@ -1812,7 +2041,9 @@ export default function App() {
                     <strong>Empty hand. Full bragging rights.</strong>
                     <p>
                       First to lose every card wins, once their final claim
-                      survives the challenge window. Play then moves clockwise.
+                      survives the challenge window. With no challenge, the next
+                      round starts one seat after the previous starter. If the
+                      starter passes, the first play sets the rank.
                     </p>
                   </div>
                 </li>
@@ -1933,13 +2164,14 @@ export default function App() {
                 </select>
               </SettingRow>
               <SettingRow
-                title="Rank sequence"
-                description="Any rank, or cycle from Ace through King."
+                title="Game variant"
+                description="Round-locked: one rank, one turn each. Challenge winner starts next."
               >
                 <select
                   aria-label="Rank sequence"
-                  value={state?.settings.rankMode ?? "free"}
+                  value={state?.settings.rankMode ?? "round"}
                   disabled={
+                    state?.practice ||
                     state?.hostId !== state?.selfId ||
                     !["lobby", "winner"].includes(state?.phase ?? "")
                   }
@@ -1947,7 +2179,8 @@ export default function App() {
                     act("settings", { rankMode: e.target.value })
                   }
                 >
-                  <option value="free">Free choice</option>
+                  <option value="round">Round-locked (default)</option>
+                  <option value="free">Free choice each turn</option>
                   <option value="ascending">Ascending</option>
                 </select>
               </SettingRow>

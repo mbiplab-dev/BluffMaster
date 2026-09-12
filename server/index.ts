@@ -152,7 +152,7 @@ function migrateHost(room: Room) {
     const next = room.players.find((p) => p.connected && !p.bot);
     if (next) {
       room.hostId = next.id;
-      log(room, `${next.name} is now the host.`);
+      log(room, `${next.name} is now the host.`, "info", next);
     }
   }
 }
@@ -176,6 +176,8 @@ function leave(s: Session, explicit = false) {
     log(
       room,
       `${p.name} ${explicit ? "left the table" : "disconnected. Their seat is saved"}.`,
+      "info",
+      p,
     );
   }
   migrateHost(room);
@@ -272,7 +274,7 @@ io.on("connection", (socket) => {
         }
         rooms.set(room.code, room);
         s.roomCode = room.code;
-        log(room, `${name} opened the table.`);
+        log(room, `${name} opened the table.`, "info", s.id);
         if (room.practice) startGame(room, s.id);
       } else if (command.type === "join" || command.type === "spectate") {
         const code = String(data.code ?? "")
@@ -322,7 +324,7 @@ io.on("connection", (socket) => {
           cancelKickVote(room);
           room.spectators.delete(s.id);
           room.players.push(player(s.id, name, avatar));
-          log(room, `${name} joined the table.`);
+          log(room, `${name} joined the table.`, "info", s.id);
         }
         migrateHost(room);
       } else {
@@ -336,6 +338,19 @@ io.on("connection", (socket) => {
             if (!["lobby", "winner"].includes(room.phase))
               throw new Error("A game is already in progress.");
             p!.ready = !p!.ready;
+            // A finished table is a rematch vote: as soon as every seated,
+            // connected player is ready, deal again without making somebody
+            // hunt for a host-only button.  The host identity is still used
+            // for the authoritative start validation.
+            if (
+              room.phase === "winner" &&
+              room.players.length >= 2 &&
+              room.players.every((player) => player.connected && player.ready)
+            ) {
+              log(room, "Everyone is ready. Shuffling the next game.", "info");
+              startGame(room, room.hostId);
+              cancelKickVote(room);
+            }
             break;
           case "start":
             startGame(room, s.id);
@@ -360,6 +375,14 @@ io.on("connection", (socket) => {
             )
               throw new Error("The host can change rules between games.");
             if (
+              room.practice &&
+              data.rankMode !== undefined &&
+              data.rankMode !== "round"
+            )
+              throw new Error(
+                "The practice table uses round-locked Bluff. Create a room to play another variant.",
+              );
+            if (
               typeof data.turnSeconds === "number" &&
               [20, 30, 45, 60].includes(data.turnSeconds)
             )
@@ -369,7 +392,11 @@ io.on("connection", (socket) => {
               [5, 8, 12].includes(data.challengeSeconds)
             )
               room.settings.challengeSeconds = data.challengeSeconds;
-            if (data.rankMode === "free" || data.rankMode === "ascending")
+            if (
+              data.rankMode === "round" ||
+              data.rankMode === "free" ||
+              data.rankMode === "ascending"
+            )
               room.settings.rankMode = data.rankMode;
             break;
           case "kick": {
@@ -389,7 +416,12 @@ io.on("connection", (socket) => {
             cancelKickVote(room);
             room.players = room.players.filter((p) => p.id !== removed.id);
             room.spectators.add(removed.id);
-            log(room, `${removed.name} is now watching from the sidelines.`);
+            log(
+              room,
+              `${removed.name} is now watching from the sidelines.`,
+              "info",
+              removed,
+            );
             break;
           }
           case "vote-kick": {
@@ -502,6 +534,8 @@ setInterval(() => {
         log(
           room,
           `${p.name} is away. An automatic player is keeping their seat warm.`,
+          "info",
+          p,
         );
         publish(room);
       }

@@ -5,7 +5,15 @@ import { layoutHand } from "../src/handLayout.js";
 test("selections open a full gap and every card stays within the hand at phone, tablet and desktop widths", () => {
   for (const width of [280, 330, 400, 540, 700, 900]) {
     const count = width < 440 ? 6 : width < 650 ? 10 : 14;
-    for (const choices of [[], [0], [3], [count - 1], [1, 3], [0, 2, 4, 5]]) {
+    for (const choices of [
+      [],
+      [0],
+      [3],
+      [count - 1],
+      [1, 3],
+      [0, 2, 4, 5],
+      Array.from({ length: count }, (_, i) => i),
+    ]) {
       const selected = new Set(choices);
       const layout = layoutHand(count, selected, width, 145);
       assert.ok(layout.cardWidth >= 25);

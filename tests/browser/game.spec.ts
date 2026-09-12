@@ -32,6 +32,10 @@ test("practice has a playable hand, multi-selection, clear, claim and server fee
   page.on("pageerror", (error) => errors.push(error.message));
   await readyPractice(page);
   await expect(page.locator(".hand-card")).toHaveCount(13);
+  await expect(page.locator(".voice-hint")).toHaveCount(0);
+  expect(
+    (await page.locator(".action-zone").boundingBox())!.height,
+  ).toBeLessThanOrEqual(96);
   await chooseCard(page, 0);
   await chooseCard(page, 1);
   await expect(page.locator(".selected-card")).toHaveCount(2);
@@ -41,8 +45,20 @@ test("practice has a playable hand, multi-selection, clear, claim and server fee
   await page.getByLabel("I’M CLAIMING").selectOption("K");
   await page.getByRole("button", { name: "Play cards", exact: true }).click();
   await expect(page.locator(".hand-card")).toHaveCount(12);
-  await expect(page.locator(".center-claim")).toContainText("1 King");
+  await expect(page.locator(".center-claim")).toContainText("1 card of K");
   await expect(page.locator(".activity-list")).toContainText("played 1 King");
+  await expect(
+    page
+      .locator(".activity-event.event-play")
+      .last()
+      .locator(".activity-player-name"),
+  ).toHaveText("You");
+  await expect(
+    page
+      .locator(".activity-event.event-play")
+      .last()
+      .locator(".activity-avatar"),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -187,7 +203,7 @@ test("recognized voice command changes rank and plays selected cards", async ({
   );
   await page.getByRole("button", { name: "Try voice commands" }).click();
   await expect(page.locator(".hand-card")).toHaveCount(11);
-  await expect(page.locator(".center-claim")).toContainText("2 Kings");
+  await expect(page.locator(".center-claim")).toContainText("2 cards of K");
 });
 
 test("network interruption preserves hand and reconnects without duplicate players", async ({

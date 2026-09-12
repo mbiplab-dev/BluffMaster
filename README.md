@@ -19,13 +19,17 @@ Choose **Public** when creating a table to list it in **Rooms**, or **Private** 
 
 The colorful single-screen table adapts to desktop, tablet, portrait phones, and landscape phones. Smaller hands use card pages instead of shrinking the entire deck. Selected cards open space on both sides; selections persist across pages. Card flights target the actual recipient's hand, and a compact HUD keeps the current turn separate from the previous player's claimed rank and card count.
 
+The practice table always uses round-locked rules, including when restoring an older table. Round changes announce the new starter. Pickups prepend cards in pile order, return the hand to its first page, and mark received cards NEW. Flights arrive in staggered left-to-right hand slots; overflow lands at the visible stack edge. Card ranges and the Next control make additional pages explicit. The center pile uses measured player/deck bounds, while claims stay at a readable text size (for example, “2 cards of 10”).
+
+Voice commands use the compact microphone button in the top bar; there is no lower prompt strip. Activity entries carry the player's public name/avatar, including after they leave. Customize the randomized play commentary in `server/commentary.ts`: `PLAY_LINES.setups` and `PLAY_LINES.replies` provide 36 pairings, with immediate repeats avoided. The server chooses the wording once and synchronizes it to the room.
+
 ## Room safeguards
 
 | Limit           | Behavior                                                                                |
 | --------------- | --------------------------------------------------------------------------------------- |
 | Players         | 2–8; new players cannot enter an active deal                                            |
 | Spectators      | 8 per room; cannot play, vote, or join player voice chat                                |
-| Cards per play  | 1–4, validated against the actor's private hand                                         |
+| Cards per play  | Any number of owned cards (1–52), validated against the actor's private hand            |
 | Vote kick       | Strict majority of seated players: 3 of 4, 5 of 8; minimum 3 seated players             |
 | Vote timing     | One open vote, 30-second expiry, 60-second initiation cooldown per player               |
 | Room actions    | 5 creates and 20 join attempts per identity per minute                                  |
@@ -38,13 +42,13 @@ These are anonymous guest identities, not authenticated accounts: clearing stora
 
 ## Play
 
-1. Select 1–4 cards, choose a claimed rank, and press **Play cards**. Cards do not have to match the claim.
+1. The default is **round-locked Bluff**. The first player to play chooses a rank for the entire round. Select any number of your cards and press **Play cards**; their real ranks do not have to match the claim.
 2. Other players have eight seconds to **Believe it** or **CALL BLUFF**. Accepting is final for that claim. The first valid challenge wins the race.
-3. A challenge reveals only the last play. If any card differs from the claimed rank, its owner picks up the entire pile. Otherwise the challenger takes the pile.
-4. Turns proceed clockwise. A turn that times out automatically passes.
+3. A challenge reveals only the last play. If any card differs from the locked rank, its owner picks up the entire pile and the challenger wins. Otherwise the challenger takes the pile and the player who made the claim wins. **The challenge winner starts a fresh round and chooses its rank.**
+4. Each player gets exactly one clockwise turn per round, playing the locked rank or passing. The starter does not take a second turn. With no challenge, the next round starts one seat after the old starter: A→B→C→D, then B→C→D→A, then C→D→A→B. Passing (including a timeout) consumes that seat's turn. If the starter passes, the first actual play locks the rank. If everyone passes, the starter still rotates. Unchallenged pile cards stay on the table across rounds.
 5. The first empty hand wins **after** the final claim survives acceptance or challenge. A caught final-card bluff does not win.
 
-The host can change turn duration, challenge duration, and free-choice versus ascending ranks between games in Preferences. Invite details include player readiness and host controls to move players to spectator seats. In-progress games accept spectators; existing players can rejoin their saved seats.
+The host can change turn duration, challenge duration, and game variant between games in Preferences. Round-locked is the default; the earlier free-choice and ascending variants remain optional. Invite details include player readiness and host controls to move players to spectator seats. In-progress games accept spectators; existing players can rejoin their saved seats. Existing pre-round saved games upgrade at their current seat without redealing cards.
 
 ## Voice and accessibility
 
