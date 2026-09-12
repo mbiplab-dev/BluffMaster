@@ -35,7 +35,9 @@ import {
 import {
   useCallback,
   useEffect,
+  lazy,
   useRef,
+  Suspense,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -68,6 +70,9 @@ type Modal =
   | "leave"
   | null;
 const emptyPlayers: Snapshot["players"] = [];
+const TableWorld = lazy(() =>
+  import("./TableWorld").then((module) => ({ default: module.TableWorld })),
+);
 
 function PlayerRoster({
   state,
@@ -973,6 +978,15 @@ export default function App() {
                   </div>
                 )}
                 <div className="table-physical">
+                  {state && (
+                    <Suspense fallback={null}>
+                      <TableWorld
+                        pileCount={state.pileCount}
+                        playerCount={state.players.length}
+                        phase={state.phase}
+                      />
+                    </Suspense>
+                  )}
                   <div className="table-rail">
                     <div className="table-felt">
                       <div className="felt-line" />

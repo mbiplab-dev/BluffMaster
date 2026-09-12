@@ -453,15 +453,33 @@ main {
     0 18px 22px #00164788;
   transform: rotateX(13deg);
   border: 1px solid #ffe1a6;
+  isolation: isolate;
+  overflow: visible;
+}
+.table-world {
+  position: absolute;
+  z-index: 0;
+  inset: -18%;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0.9;
+  filter: saturate(1.12) drop-shadow(0 15px 13px #00153c88);
+}
+.table-world-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .table-rail {
+  position: relative;
+  z-index: 1;
   padding: 10px;
   background: linear-gradient(
     160deg,
-    #ffe7a1,
-    #f4b733 45%,
-    #dd8f20 75%,
-    #ffd363
+    #ffe7a1ed,
+    #f4b733ed 45%,
+    #dd8f20ed 75%,
+    #ffd363ed
   );
   border-color: #ffedb2;
   box-shadow:
@@ -471,9 +489,9 @@ main {
 .table-felt {
   background: radial-gradient(
     ellipse at 40% 25%,
-    #34c283,
-    #1da66c 55%,
-    #117a59
+    #34c283f2,
+    #1da66cf2 55%,
+    #117a59f2
   );
   border: 2px solid #126346;
   box-shadow:
