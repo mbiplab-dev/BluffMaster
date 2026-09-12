@@ -16,6 +16,7 @@ const allowed = new Set([
   "vote-kick",
   "voice",
   "reaction",
+  "chat",
   "leave",
 ]);
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -87,6 +88,11 @@ export function validateCommand(input: unknown): Command {
     throw new Error("Invalid microphone status.");
   if (type === "reaction" && !REACTIONS.includes(data.emoji as never))
     throw new Error("Choose a table reaction.");
+  if (
+    type === "chat" &&
+    (!text(data.text, 180) || /[\u0000-\u001f\u007f]/.test(data.text as string))
+  )
+    throw new Error("Use a chat message with 1–180 printable characters.");
   if (type === "settings") {
     if (
       data.turnSeconds !== undefined &&

@@ -175,10 +175,12 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 4800);
   }, []);
-  const { state, rooms, connected, busy, socket, act, offset, reactions } =
+  const { state, rooms, connected, busy, socket, act, offset, reactions, chat } =
     useGame(notify);
   const [joinCode, setJoinCode] = useState("");
   const [joinWatching, setJoinWatching] = useState(false);
+  const [chatText, setChatText] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const gamePanelRef = useRef<HTMLElement>(null);
   const [modal, setModal] = useState<Modal>(
     new URLSearchParams(location.search).has("room") ? "join" : null,
@@ -250,6 +252,15 @@ export default function App() {
       return;
     }
     if (await act("play", { ids: selected, rank })) setSelected([]);
+  };
+  const sendChat = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const text = chatText.trim();
+    if (!text) return;
+    if (await act("chat", { text })) setChatText("");
+  };
+  const sendReaction = async (emoji: (typeof REACTIONS)[number]) => {
+    if (await act("reaction", { emoji })) setEmojiOpen(false);
   };
   const speech = useSpeech((text) => {
     const command = text
@@ -879,18 +890,6 @@ export default function App() {
                     <Eye size={12} /> {state?.spectators ?? 0}/
                     {LIMITS.spectators}
                   </span>
-                  <div className="reaction-dock" role="group" aria-label="Send a table reaction">
-                    {REACTIONS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        disabled={!connected || state?.spectator}
-                        onClick={() => void act("reaction", { emoji })}
-                        aria-label={`Send ${emoji} reaction`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
                   <span />{" "}
                   <button
                     className="icon-button"
@@ -1105,13 +1104,40 @@ export default function App() {
                     );
                   })}
                 {me && state?.phase !== "lobby" && (
-                  <PlayerSeat
-                    player={me}
-                    active={isTurn}
-                    local
-                    listening={speech.listening}
-                    style={{ left: "50%", top: "90%" }}
-                  />
+                  <>
+                    <PlayerSeat
+                      player={me}
+                      active={isTurn}
+                      local
+                      listening={speech.listening}
+                      style={{ left: "50%", top: "90%" }}
+                    />
+                    <div className="local-reaction-dock" role="group" aria-label="Send a table reaction">
+                      <button
+                        className={`emoji-toggle ${emojiOpen ? "emoji-toggle-open" : ""}`}
+                        disabled={!connected || state?.spectator}
+                        onClick={() => setEmojiOpen((open) => !open)}
+                        aria-expanded={emojiOpen}
+                        aria-label="Open table reactions"
+                      >
+                        😄
+                      </button>
+                      {emojiOpen && (
+                        <div className="reaction-picker" role="menu" aria-label="Choose a reaction">
+                          {REACTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => void sendReaction(emoji)}
+                              aria-label={`Send ${emoji} reaction`}
+                              role="menuitem"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
                 {!state && (
                   <div className="center-scene loading-scene">
@@ -1751,49 +1777,62 @@ export default function App() {
                   </div>
                 )}
                 <div className="rail-section-title">
-                  <h3>Table talk</h3>
+                  <h3>Table chat</h3>
                   <span
                     className={`voice-status ${voice.enabled ? "voice-live" : ""}`}
                   >
                     {voice.enabled ? "LIVE" : "VOICE OFF"}
                   </span>
                 </div>
-                <p>A poker face can’t hide your voice.</p>
-                <div className="voice-avatars">
-                  {(state?.players ?? []).slice(0, 5).map((p) => (
-                    <div
-                      key={p.id}
-                      className={`${p.speaking ? "speaking" : ""} ${p.muted ? "voice-avatar-muted" : ""}`}
-                    >
-                      <Avatar index={p.avatar} />
-                      <span>{p.id === state?.selfId ? "You" : p.name}</span>
-                    </div>
-                  ))}
+                <div className="chat-messages" aria-live="polite">
+                  {chat.length ? (
+                    chat.map((message) => (
+                      <div
+                        className={`chat-message ${message.playerId === state?.selfId ? "chat-message-self" : ""}`}
+                        key={message.id}
+                      >
+                        <Avatar index={message.avatar} />
+                        <p>
+                          <strong>{message.playerId === state?.selfId ? "You" : message.name}</strong>
+                          <span>{message.text}</span>
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="chat-empty">Drop a reaction, or say something suspicious.</p>
+                  )}
                 </div>
+                <form className="chat-compose" onSubmit={sendChat}>
+                  <input
+                    value={chatText}
+                    maxLength={180}
+                    onChange={(event) => setChatText(event.target.value)}
+                    disabled={!connected || state?.spectator}
+                    placeholder={state?.spectator ? "Spectators can watch chat" : "Say something…"}
+                    aria-label="Send a table chat message"
+                  />
+                  <button disabled={!chatText.trim() || !connected || state?.spectator} aria-label="Send message">
+                    <ArrowRight size={14} />
+                  </button>
+                </form>
                 <button
-                  className={`button voice-join ${voice.enabled ? "voice-joined" : ""}`}
+                  className={`button voice-join chat-voice ${voice.enabled ? "voice-joined" : ""}`}
                   disabled={voice.connecting || !connected || state?.spectator}
                   onClick={voice.toggle}
                 >
                   {voice.connecting ? (
-                    <LoaderCircle size={15} className="spin" />
+                    <LoaderCircle size={14} className="spin" />
                   ) : voice.enabled ? (
-                    <Mic size={15} />
+                    <Mic size={14} />
                   ) : (
-                    <Headphones size={15} />
+                    <Headphones size={14} />
                   )}
                   {voice.connecting
                     ? "Connecting…"
                     : voice.enabled
-                      ? "Leave voice chat"
-                      : "Join voice chat"}
-                  <span className="voice-button-dot" />
+                      ? "Voice on"
+                      : "Join voice"}
                 </button>
-                <span className="voice-privacy">
-                  {voice.enabled
-                    ? "Your microphone is on. Click to mute & leave."
-                    : "Your mic stays off until you join."}
-                </span>
               </section>
               <section className="activity-card">
                 <div className="rail-section-title">

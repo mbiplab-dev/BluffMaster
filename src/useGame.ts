@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { Snapshot, Reply, Command, OpenRoom, Reaction } from "../shared/types";
+import type {
+  Snapshot,
+  Reply,
+  Command,
+  OpenRoom,
+  Reaction,
+  ChatMessage,
+} from "../shared/types";
 
 export function useGame(notify: (text: string) => void) {
   const [state, setState] = useState<Snapshot | null>(null);
@@ -9,6 +16,7 @@ export function useGame(notify: (text: string) => void) {
   const [busy, setBusy] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
   const reactionTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const socketRef = useRef<Socket | null>(null);
   const currentRef = useRef<Snapshot | null>(null);
@@ -101,9 +109,18 @@ export function useGame(notify: (text: string) => void) {
       }, 2600);
       reactionTimers.current.set(reaction.id, timer);
     });
+    connection.on("chat", (message: ChatMessage) => {
+      setChat((current) =>
+        current.some((item) => item.id === message.id)
+          ? current
+          : [...current, message].slice(-60),
+      );
+    });
     connection.on("left", () => {
       currentRef.current = null;
       setState(null);
+      setChat([]);
+      setReactions([]);
     });
     connection.on("removed", ({ reason }: { reason: string }) => {
       currentRef.current = null;
@@ -123,5 +140,5 @@ export function useGame(notify: (text: string) => void) {
       socketRef.current = null;
     };
   }, [act]);
-  return { state, rooms, connected, busy, socket, act, offset, reactions };
+  return { state, rooms, connected, busy, socket, act, offset, reactions, chat };
 }

@@ -320,8 +320,8 @@ main {
   overflow: hidden;
 }
 .table-toolbar {
-  flex: 0 0 36px;
-  height: 36px;
+  flex: 0 0 44px;
+  height: 44px;
   padding: 0 16px;
   background: #0c327366;
   border-bottom: 1px solid #91c4ff26;
@@ -349,6 +349,7 @@ main {
   margin-left: auto;
   margin-right: 12px;
   color: #ddebff;
+  flex: 0 0 auto;
 }
 .top-turn-timer-ring {
   position: relative;
@@ -398,14 +399,13 @@ main {
   50% { transform: scale(1.13); }
 }
 @media (max-width: 680px) {
-  .table-toolbar { padding-inline: 8px; }
+  .table-toolbar { height: 42px; flex-basis: 42px; padding-inline: 8px; }
   .table-title strong, .table-type, .table-invite, .spectator-count { display: none; }
   .top-turn-timer { margin-left: 5px; margin-right: auto; gap: 4px; }
   .top-turn-timer-ring { width: 28px; height: 28px; }
   .top-turn-timer-ring::before { width: 20px; height: 20px; }
   .top-turn-timer-ring b { font-size: 14px; }
-  .reaction-dock button:nth-child(n + 5) { display: none; }
-  .reaction-dock { gap: 1px; }
+  .reaction-picker { width: 118px; grid-template-columns: repeat(4, 1fr); }
   .table-meta { gap: 4px; }
   .table-meta > span { display: none; }
   .phase-moment { top: 70%; gap: 15px; }
@@ -418,30 +418,60 @@ main {
 .table-meta > span {
   background: #90baff40;
 }
-.reaction-dock {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 3px;
-  border-radius: 999px;
-  background: #071f5b6e;
-  border: 1px solid #a5ccff44;
+.local-reaction-dock {
+  position: absolute;
+  z-index: 19;
+  left: calc(50% + 40px);
+  top: calc(90% - 16px);
+  width: 28px;
+  height: 28px;
 }
-.reaction-dock button {
-  width: 20px;
-  height: 20px;
+.emoji-toggle {
+  width: 28px;
+  height: 28px;
   padding: 0;
   display: grid;
   place-items: center;
-  border: 0;
+  border: 1px solid #ffeb87;
   border-radius: 50%;
-  background: transparent;
+  background: linear-gradient(#2a6ec7, #164588);
+  box-shadow: 0 3px 0 #08275c;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 16px;
   transition: transform .16s ease, background .16s ease;
 }
-.reaction-dock button:hover:not(:disabled) { transform: translateY(-3px) scale(1.18); background: #ffffff22; }
-.reaction-dock button:disabled { opacity: .38; cursor: default; }
+.emoji-toggle:hover:not(:disabled), .emoji-toggle-open { transform: translateY(-3px) scale(1.12); background: #3f8ae2; }
+.emoji-toggle:disabled { opacity: .38; cursor: default; }
+.reaction-picker {
+  position: absolute;
+  right: -6px;
+  bottom: 35px;
+  width: 146px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #c7e5ff88;
+  border-radius: 12px;
+  background: #092a63f2;
+  box-shadow: 0 6px 18px #001333aa;
+  transform-origin: bottom right;
+  animation: pickerOpen .16s ease-out both;
+}
+.reaction-picker button {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 17px;
+}
+.reaction-picker button:hover { background: #ffffff25; transform: translateY(-2px) scale(1.12); }
+@keyframes pickerOpen { from { opacity: 0; transform: scale(.8) translateY(5px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .reaction-bursts { position: absolute; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
 .reaction-burst {
   position: absolute;
@@ -1380,6 +1410,58 @@ main {
   flex: none;
   padding: 14px 15px;
 }
+.chat-messages {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 72px;
+  max-height: 108px;
+  overflow-y: auto;
+  margin: 9px 0 8px;
+  padding-right: 3px;
+}
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: #d8e8ff;
+}
+.chat-message .avatar { width: 22px; height: 22px; flex: 0 0 22px; }
+.chat-message .avatar > span { font-size: 15px; }
+.chat-message p { display: grid; gap: 1px; min-width: 0; margin: 0; font-size: 9px; line-height: 1.25; }
+.chat-message strong { color: #ffe57a; font-size: 8px; }
+.chat-message span { overflow-wrap: anywhere; }
+.chat-message-self p { color: #fff; }
+.chat-empty { margin: 0; align-self: center; color: #b9d3ff; font-size: 9px; line-height: 1.35; }
+.chat-compose { display: flex; gap: 5px; }
+.chat-compose input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid #9dc8ff66;
+  border-radius: 8px;
+  background: #071f5688;
+  color: #fff;
+  font-size: 10px;
+  outline: none;
+}
+.chat-compose input:focus { border-color: #ffe36a; box-shadow: 0 0 0 2px #ffe36a33; }
+.chat-compose input::placeholder { color: #aac8ee; }
+.chat-compose button {
+  width: 32px;
+  height: 30px;
+  flex: 0 0 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #9fdaff;
+  border-radius: 8px;
+  background: #3c87dd;
+  color: #fff;
+  cursor: pointer;
+}
+.chat-compose button:disabled { opacity: .45; cursor: default; }
+.chat-voice { width: 100%; min-height: 30px !important; margin-top: 7px; font-size: 10px !important; }
 .roster-card {
   padding-bottom: 12px;
   margin-bottom: 12px;
@@ -3291,8 +3373,11 @@ main {
   }
 }
 .action-zone {
-  height: 96px;
-  flex-basis: 96px;
+  height: 92px;
+  flex-basis: 92px;
+  padding: 6px 16px 0;
+  border-top: 0;
+  background: transparent;
 }
 .activity-event .activity-avatar {
   width: 32px;
@@ -3410,6 +3495,23 @@ main {
   font:
     800 clamp(14px, 1.5vw, 21px)/1.35 "Nunito",
     sans-serif;
+}
+
+/* The urgent counter owns enough real layout height to never be clipped. */
+.table-toolbar:has(.top-turn-timer) {
+  height: 44px;
+  flex-basis: 44px;
+}
+@media (max-width: 680px) {
+  .table-toolbar:has(.top-turn-timer) {
+    height: 42px;
+    flex-basis: 42px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .game-panel:has(.top-turn-timer) {
+    grid-template-rows: 44px 59px minmax(0, 1fr) auto;
+  }
 }
 .table-stage .center-claim > span {
   font-size: 11px;

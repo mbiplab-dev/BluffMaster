@@ -233,6 +233,7 @@ io.on("connection", (socket) => {
   let rateStart = Date.now(),
     rateCount = 0;
   const lastReactionAt = new Map<string, number>();
+  let lastChatAt = 0;
   socket.on("command", (command: Command, callback: (reply: Reply) => void) => {
     const ack = typeof callback === "function" ? callback : () => {};
     if (Date.now() - rateStart > 1000) {
@@ -458,6 +459,26 @@ io.on("connection", (socket) => {
             for (const member of sessions.values())
               if (member.roomCode === room.code && member.socketId)
                 io.to(member.socketId).emit("reaction", reaction);
+            break;
+          }
+          case "chat": {
+            const at = Date.now();
+            if (at - lastChatAt < 650)
+              throw new Error("Give the table a moment before another message.");
+            const text = String(data.text ?? "").trim();
+            if (!text || text.length > 180) throw new Error("That message is not valid.");
+            lastChatAt = at;
+            const message = {
+              id: randomUUID(),
+              playerId: p!.id,
+              name: p!.name,
+              avatar: p!.avatar,
+              text,
+              at,
+            };
+            for (const member of sessions.values())
+              if (member.roomCode === room.code && member.socketId)
+                io.to(member.socketId).emit("chat", message);
             break;
           }
           case "leave":
