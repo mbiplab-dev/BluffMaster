@@ -5,7 +5,6 @@
   "installCommand": "npm ci",
   "functions": {
     "api/socket.ts": {
-      "runtime": "nodejs22.x",
       "maxDuration": 300
     }
   },
