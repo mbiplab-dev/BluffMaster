@@ -29,7 +29,7 @@ import { Storage, type Session } from "./storage.js";
 import { validateCommand } from "./protocol.js";
 import { voteToKick, expireKickVote, cancelKickVote } from "./moderation.js";
 
-const app = express();
+export const app = express();
 app.disable("x-powered-by");
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -42,8 +42,8 @@ app.use((_req, res, next) => {
     );
   next();
 });
-const http = createServer(app);
-const io = new Server(http, {
+export const http = createServer(app);
+export const io = new Server(http, {
   maxHttpBufferSize: 24_000,
   pingTimeout: 20_000,
   allowRequest: (req, callback) => {
@@ -629,7 +629,12 @@ if (process.env.NODE_ENV === "production") {
   });
   app.use(vite.middlewares);
 }
-const port = Number(process.env.PORT || 3000);
-http.listen(port, "0.0.0.0", () =>
-  console.log(`BLUFF is ready at http://localhost:${port}`),
-);
+// Vercel imports this module as a WebSocket-capable function. In local/Docker
+// deployments we still own the HTTP listener; never call listen() inside a
+// serverless invocation.
+if (!process.env.VERCEL) {
+  const port = Number(process.env.PORT || 3000);
+  http.listen(port, "0.0.0.0", () =>
+    console.log(`BLUFF is ready at http://localhost:${port}`),
+  );
+}
