@@ -187,11 +187,15 @@ function leave(s: Session, explicit = false) {
   publish(room);
   if (explicit) s.roomCode = undefined;
 }
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   socket.emit("rooms", openRooms());
   const supplied = socket.handshake.auth?.token;
   let session =
     typeof supplied === "string" ? sessions.get(supplied) : undefined;
+  if (!session && typeof supplied === "string") {
+    session = await storage.remoteSession(supplied);
+    if (session) sessions.set(session.token, session);
+  }
   if (!session) {
     const token = randomBytes(32).toString("hex");
     session = { id: randomUUID(), token, seen: new Map(), at: Date.now() };
@@ -209,7 +213,11 @@ io.on("connection", (socket) => {
     selfId: s.id,
     hasRoom: rooms.has(s.roomCode ?? ""),
   });
-  const existing = rooms.get(s.roomCode ?? "");
+  let existing = rooms.get(s.roomCode ?? "");
+  if (!existing && s.roomCode) {
+    existing = await storage.remoteRoom(s.roomCode);
+    if (existing) rooms.set(existing.code, existing);
+  }
   if (existing) {
     const p = existing.players.find((p) => p.id === s.id);
     if (p) {
@@ -235,7 +243,7 @@ io.on("connection", (socket) => {
     rateCount = 0;
   const lastReactionAt = new Map<string, number>();
   let lastChatAt = 0;
-  socket.on("command", (command: Command, callback: (reply: Reply) => void) => {
+  socket.on("command", async (command: Command, callback: (reply: Reply) => void) => {
     const ack = typeof callback === "function" ? callback : () => {};
     if (Date.now() - rateStart > 1000) {
       rateCount = 0;
@@ -260,6 +268,10 @@ io.on("connection", (socket) => {
           ? data.avatar
           : 0;
       let room = rooms.get(s.roomCode ?? "");
+      if (!room && s.roomCode) {
+        room = await storage.remoteRoom(s.roomCode);
+        if (room) rooms.set(room.code, room);
+      }
       if (command.type === "create" || command.type === "practice") {
         if (rooms.size >= LIMITS.rooms)
           throw new Error("The club is full. Try again shortly.");
@@ -285,7 +297,11 @@ io.on("connection", (socket) => {
         const code = String(data.code ?? "")
           .trim()
           .toUpperCase();
-        const target = rooms.get(code);
+        let target = rooms.get(code);
+        if (!target) {
+          target = await storage.remoteRoom(code);
+          if (target) rooms.set(target.code, target);
+        }
         if (!target || target.practice)
           throw new Error(
             "That room was not found. Check the six-character code.",

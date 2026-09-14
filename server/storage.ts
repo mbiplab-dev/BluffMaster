@@ -3,6 +3,7 @@ import { mkdirSync, chmodSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Room } from "./engine.js";
 import type { Reply } from "../shared/types.js";
+import { Redis } from "@upstash/redis";
 
 export interface Session {
   id: string;
@@ -16,6 +17,7 @@ export interface Session {
 /** A single authoritative process with durable rooms and resume identities. */
 export class Storage {
   private db: DatabaseSync;
+  private redis: Redis | null = null;
   constructor(
     // Vercel's bundle is read-only. A hosted Redis-backed storage adapter is
     // the next scaling step; this safe fallback keeps the realtime function
@@ -23,6 +25,10 @@ export class Storage {
     path = process.env.BLUFF_DATABASE ||
       (process.env.VERCEL ? ":memory:" : resolve(".data/bluff.sqlite")),
   ) {
+    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (redisUrl && redisToken)
+      this.redis = new Redis({ url: redisUrl, token: redisToken });
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
@@ -97,6 +103,7 @@ export class Storage {
         room.code,
         JSON.stringify({ ...room, spectators: [...room.spectators] }),
       );
+    if (this.redis) void this.redis.set(`bluff:room:${room.code}`, { ...room, spectators: [...room.spectators] });
   }
   session(session: Session) {
     this.db.prepare("INSERT OR REPLACE INTO sessions VALUES (?, ?)").run(
@@ -104,9 +111,29 @@ export class Storage {
       JSON.stringify({
         ...session,
         socketId: undefined,
-        seen: [...session.seen],
+      seen: [...session.seen],
       }),
     );
+    if (this.redis)
+      void this.redis.set(`bluff:session:${session.token}`, {
+        ...session,
+        socketId: undefined,
+        seen: [...session.seen],
+      }, { ex: 60 * 60 * 24 });
+  }
+  async remoteRoom(code: string): Promise<Room | undefined> {
+    if (!this.redis) return undefined;
+    const data = await this.redis.get<Record<string, unknown>>(`bluff:room:${code}`);
+    if (!data) return undefined;
+    const room = data as unknown as Room;
+    room.spectators = new Set((data.spectators as string[] | undefined) ?? []);
+    return room;
+  }
+  async remoteSession(token: string): Promise<Session | undefined> {
+    if (!this.redis) return undefined;
+    const data = await this.redis.get<Record<string, unknown>>(`bluff:session:${token}`);
+    if (!data) return undefined;
+    return { ...(data as unknown as Session), socketId: undefined, seen: new Map((data.seen as [string, Reply][] | undefined) ?? []) };
   }
   deleteRoom(code: string) {
     this.db.prepare("DELETE FROM rooms WHERE code = ?").run(code);
