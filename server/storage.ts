@@ -17,7 +17,11 @@ export interface Session {
 export class Storage {
   private db: DatabaseSync;
   constructor(
-    path = process.env.BLUFF_DATABASE || resolve(".data/bluff.sqlite"),
+    // Vercel's bundle is read-only. A hosted Redis-backed storage adapter is
+    // the next scaling step; this safe fallback keeps the realtime function
+    // bootable in environments without a writable filesystem.
+    path = process.env.BLUFF_DATABASE ||
+      (process.env.VERCEL ? ":memory:" : resolve(".data/bluff.sqlite")),
   ) {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
