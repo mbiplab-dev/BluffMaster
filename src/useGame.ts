@@ -62,6 +62,11 @@ export function useGame(notify: (text: string) => void) {
   useEffect(() => {
     const connection = io({
       path: "/api/socket",
+      // Vercel functions can route successive long-polling requests to
+      // different instances. A direct WebSocket stays pinned to the function
+      // that owns the session and avoids intermittent 400 unknown-sid errors.
+      transports: ["websocket"],
+      upgrade: false,
       auth: { token: sessionStorage.getItem("bluff-session") },
       autoConnect: false,
     });
