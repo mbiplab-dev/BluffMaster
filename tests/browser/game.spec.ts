@@ -39,26 +39,16 @@ test("practice has a playable hand, multi-selection, clear, claim and server fee
   await chooseCard(page, 0);
   await chooseCard(page, 1);
   await expect(page.locator(".selected-card")).toHaveCount(2);
-  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Clear selected cards", exact: true })
+    .click();
   await expect(page.locator(".selected-card")).toHaveCount(0);
   await chooseCard(page, 12);
   await page.getByLabel("I’M CLAIMING").selectOption("K");
   await page.getByRole("button", { name: "Play cards", exact: true }).click();
   await expect(page.locator(".hand-card")).toHaveCount(12);
   await expect(page.locator(".center-claim")).toContainText("1 card of K");
-  await expect(page.locator(".activity-list")).toContainText("played 1 King");
-  await expect(
-    page
-      .locator(".activity-event.event-play")
-      .last()
-      .locator(".activity-player-name"),
-  ).toHaveText("You");
-  await expect(
-    page
-      .locator(".activity-event.event-play")
-      .last()
-      .locator(".activity-avatar"),
-  ).toBeVisible();
+  await expect(page.locator(".activity-list")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -93,6 +83,31 @@ test("private room UI supports invites, ready, start, challenge and page reload"
   await chooseCard(host, 0);
   await host.getByLabel("I’M CLAIMING").selectOption(lie);
   await host.getByRole("button", { name: "Play cards", exact: true }).click();
+  await guest.setViewportSize({ width: 390, height: 844 });
+  await expect(guest.locator(".game-status")).toBeHidden();
+  const accept = guest.getByRole("button", { name: "Believe it" });
+  const bluff = guest.getByRole("button", { name: /CALL BLUFF/ });
+  await expect(accept).toBeVisible();
+  await expect(bluff).toBeVisible();
+  await guest.waitForTimeout(250);
+  const [actionBox, acceptBox, bluffBox] = await Promise.all([
+    guest.locator(".action-zone").boundingBox(),
+    accept.boundingBox(),
+    bluff.boundingBox(),
+  ]);
+  expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(844);
+  expect(actionBox!.height).toBeLessThanOrEqual(84);
+  expect(acceptBox!.y).toBeGreaterThanOrEqual(actionBox!.y);
+  expect(acceptBox!.y + acceptBox!.height).toBeLessThanOrEqual(
+    actionBox!.y + actionBox!.height,
+  );
+  expect(bluffBox!.y + bluffBox!.height).toBeLessThanOrEqual(
+    actionBox!.y + actionBox!.height,
+  );
+  expect(acceptBox!.x + acceptBox!.width).toBeLessThanOrEqual(bluffBox!.x);
+  expect(await guest.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    390,
+  );
   await guest.getByRole("button", { name: /CALL BLUFF/ }).click();
   await expect(host.locator(".center-status")).toHaveText("CAUGHT BLUFFING!");
   await expect(guest.locator(".reveal-card")).toHaveCount(1);

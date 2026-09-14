@@ -45,6 +45,32 @@ for (let count = 2; count <= 8; count++)
       );
       await page.goto("/");
       await expect(page.locator(".turn-tag")).toHaveText("Your move");
+      const expectedShape =
+        count === 2
+          ? "duel"
+          : count === 3
+            ? "triangle"
+            : count === 4
+              ? "square"
+              : count <= 6
+                ? "hex"
+                : "oval";
+      const expectedMobileRatio =
+        count === 2
+          ? 1.2
+          : count === 3
+            ? 1.22
+            : count === 4
+              ? 1.18
+              : count === 5
+                ? 1.34
+                : count === 6
+                  ? 1.46
+                  : 1.62;
+      await expect(page.locator(".table-stage")).toHaveAttribute(
+        "data-table-shape",
+        expectedShape,
+      );
       for (let i = 0; i < 2; i++) {
         const card = page.locator(".hand-card").nth(i);
         await card.focus();
@@ -66,6 +92,16 @@ for (let count = 2; count <= 8; count++)
       ]) {
         await page.setViewportSize({ width, height });
         await page.waitForTimeout(250);
+        if (width === 390) {
+          const mobileRatio = await page
+            .locator(".table-physical")
+            .evaluate((table) => {
+              const [inline, block = "1"] =
+                getComputedStyle(table).aspectRatio.split("/");
+              return Number.parseFloat(inline) / Number.parseFloat(block);
+            });
+          expect(mobileRatio).toBeCloseTo(expectedMobileRatio, 2);
+        }
         const overlaps = await page
           .locator(".table-stage")
           .evaluate((table) => {

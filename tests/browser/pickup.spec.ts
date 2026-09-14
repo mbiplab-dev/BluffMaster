@@ -32,10 +32,10 @@ test("pickup returns to page one, prepends new cards and lands each card progres
       .selectOption(labels[0].startsWith("K ") ? "A" : "K");
     await a.getByRole("button", { name: "Play cards", exact: true }).click();
     await a.getByRole("button", { name: "Next cards", exact: true }).click();
-    await expect(a.locator(".page-number")).toHaveText("Page 2/2");
+    await expect(a.locator(".page-card-range")).toContainText(/^15–/);
     await b.getByRole("button", { name: /CALL BLUFF/ }).click();
     await expect(a.locator(".hand-card")).toHaveCount(26, { timeout: 7000 });
-    await expect(a.locator(".page-number")).toHaveText("Page 1/2");
+    await expect(a.locator(".page-card-range")).toContainText(/^1–/);
     const positions = await a
       .locator(".flight-target .flying-card")
       .evaluateAll((es) =>

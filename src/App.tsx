@@ -105,13 +105,19 @@ function PlayerRoster({
           >
             <span
               className={`roster-avatar-ring ${active ? "timer-running" : ""}`}
-              style={{ "--timer-progress": `${active ? progress : 0}%` } as CSSProperties}
+              style={
+                {
+                  "--timer-progress": `${active ? progress : 0}%`,
+                } as CSSProperties
+              }
             >
               <Avatar index={player.avatar} />
             </span>
             {!compact && (
               <span className="roster-player-copy">
-                <strong>{player.id === state.selfId ? "You" : player.name}</strong>
+                <strong>
+                  {player.id === state.selfId ? "You" : player.name}
+                </strong>
                 <small>
                   {active
                     ? `${seconds}s · YOUR TURN`
@@ -121,7 +127,9 @@ function PlayerRoster({
                 </small>
               </span>
             )}
-            <span className={`roster-mic ${player.muted ? "roster-mic-muted" : ""}`}>
+            <span
+              className={`roster-mic ${player.muted ? "roster-mic-muted" : ""}`}
+            >
               {!player.connected ? <WifiOff size={11} /> : <Mic size={11} />}
             </span>
           </div>
@@ -139,14 +147,21 @@ function ReactionBursts({
   state: Snapshot;
 }) {
   return (
-    <div className="reaction-bursts" aria-live="polite" aria-label="Table reactions">
+    <div
+      className="reaction-bursts"
+      aria-live="polite"
+      aria-label="Table reactions"
+    >
       {reactions.map((reaction) => {
-        const player = state.players.find((item) => item.id === reaction.playerId);
+        const player = state.players.find(
+          (item) => item.id === reaction.playerId,
+        );
         if (!player) return null;
         const local = player.id === state.selfId;
         const others = state.players.filter((item) => item.id !== state.selfId);
         const index = others.findIndex((item) => item.id === player.id);
-        const angle = ((90 + (360 * (index + 1)) / state.players.length) * Math.PI) / 180;
+        const angle =
+          ((90 + (360 * (index + 1)) / state.players.length) * Math.PI) / 180;
         const left = local
           ? 50
           : 50 + Math.cos(angle) * (Math.abs(Math.cos(angle)) > 0.95 ? 42 : 35);
@@ -175,8 +190,17 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 4800);
   }, []);
-  const { state, rooms, connected, busy, socket, act, offset, reactions, chat } =
-    useGame(notify);
+  const {
+    state,
+    rooms,
+    connected,
+    busy,
+    socket,
+    act,
+    offset,
+    reactions,
+    chat,
+  } = useGame(notify);
   const [joinCode, setJoinCode] = useState("");
   const [joinWatching, setJoinWatching] = useState(false);
   const [chatText, setChatText] = useState("");
@@ -243,8 +267,11 @@ export default function App() {
   const timerDuration =
     state?.phase === "challenge"
       ? state.settings.challengeSeconds
-      : state?.settings.turnSeconds ?? 1;
-  const timerProgress = Math.max(0, Math.min(100, (seconds / timerDuration) * 100));
+      : (state?.settings.turnSeconds ?? 1);
+  const timerProgress = Math.max(
+    0,
+    Math.min(100, (seconds / timerDuration) * 100),
+  );
   const play = async () => {
     if (!selected.length) {
       notify("Select the cards you want to play first.");
@@ -421,14 +448,6 @@ export default function App() {
       setHandPage(0);
       notify(`${received.length} cards added to the front of your hand.`);
     }
-    if (
-      prev?.code === state.code &&
-      state.round !== prev.round &&
-      state.settings.rankMode === "round"
-    )
-      notify(
-        `Round ${state.round}: ${state.players.find((p) => p.id === state.roundStarterId)?.name} starts. Choose a new rank.`,
-      );
     if (state.phase === "dealing") setReceivedIds([]);
     if (prev?.deadline !== state.deadline || prev?.phase !== state.phase) {
       if (state.phase === "challenge") {
@@ -557,18 +576,17 @@ export default function App() {
   );
   const lastPlay = state?.lastPlay;
   const lastPlayer = state?.players.find((p) => p.id === lastPlay?.playerId);
-  const nextPlayer =
-    state?.players[
-      (state.players.findIndex(
-        (p) =>
-          p.id ===
-          (roundMode && state.turnsTaken === state.players.length - 1
-            ? state.roundStarterId
-            : state.turnId),
-      ) +
-        1) %
-        state.players.length
-    ];
+  const playerCount = state?.players.length ?? 4;
+  const tableShape =
+    playerCount <= 2
+      ? "duel"
+      : playerCount === 3
+        ? "triangle"
+        : playerCount === 4
+          ? "square"
+          : playerCount <= 6
+            ? "hex"
+            : "oval";
   const phaseTitle = !state
     ? "Connecting…"
     : state.phase === "turn"
@@ -838,11 +856,13 @@ export default function App() {
                         : "Your private table"}
                   </strong>
                   <span className="table-type">
-                    {state?.practice
-                      ? "ROUND BLUFF"
-                      : state?.visibility === "public"
-                        ? "OPEN ROOM"
-                        : "INVITE ONLY"}
+                    {state && state.phase !== "lobby"
+                      ? `R${state.round} · ${state.roundRank ? `${state.roundRank}s LOCKED` : "PICK A RANK"}`
+                      : state?.practice
+                        ? "ROUND BLUFF"
+                        : state?.visibility === "public"
+                          ? "OPEN ROOM"
+                          : "INVITE ONLY"}
                   </span>
                 </div>
                 {timedPhase && (
@@ -852,12 +872,22 @@ export default function App() {
                   >
                     <span
                       className="top-turn-timer-ring"
-                      style={{ "--timer-progress": `${timerProgress}%` } as CSSProperties}
+                      style={
+                        {
+                          "--timer-progress": `${timerProgress}%`,
+                        } as CSSProperties
+                      }
                     >
                       <b>{seconds}</b>
                     </span>
                     <span>
-                      <strong>{state?.phase === "challenge" ? "CALL IT" : isTurn ? "YOUR TURN" : "TURN"}</strong>
+                      <strong>
+                        {state?.phase === "challenge"
+                          ? "CALL IT"
+                          : isTurn
+                            ? "YOUR TURN"
+                            : `${active?.name ?? "TURN"}`}
+                      </strong>
                       <small>{seconds <= 10 ? "HURRY!" : "SECONDS LEFT"}</small>
                     </span>
                   </div>
@@ -893,81 +923,17 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div
-                className={`game-status ${isTurn ? "status-your-turn" : ""}`}
+              <p
+                className="game-announcer"
                 aria-label="Current game status"
                 aria-live="polite"
                 aria-atomic="true"
               >
-                <div className="status-turn">
-                  <span className="status-label">
-                    {roundMode && state?.phase !== "lobby"
-                      ? `ROUND ${state?.round} · ${state?.roundRank ? `${rankName(state.roundRank)} LOCKED` : "CHOOSE A RANK"}`
-                      : state?.phase === "turn"
-                        ? "CURRENT TURN"
-                        : "RIGHT NOW"}
-                  </span>
-                  <strong>{phaseTitle}</strong>
-                  <span>
-                    {state?.phase === "challenge"
-                      ? canChallenge
-                        ? "Call bluff or accept the claim"
-                        : state.claim?.playerId === state.selfId
-                          ? "Other players are deciding"
-                          : "You accepted this claim"
-                      : state?.phase === "turn"
-                        ? `${roundMode && state.turnsTaken === state.players.length - 1 ? "Next round" : "Up next"}: ${nextPlayer?.id === state.selfId ? "You" : nextPlayer?.name}`
-                        : state?.phase === "lobby"
-                          ? "Ready up to start the game"
-                          : "Watch the center of the table"}
-                  </span>
-                </div>
-                <div className="status-last-play">
-                  <span className="status-label">
-                    {lastPlay?.outcome === "pending"
-                      ? "JUST PLAYED · FACE DOWN"
-                      : "LAST PLAY"}
-                  </span>
-                  <strong>
-                    {lastPlay
-                      ? `${lastPlayer?.id === state?.selfId ? "You" : (lastPlayer?.name ?? "Player")} played ${lastPlay.count} card${lastPlay.count === 1 ? "" : "s"}`
-                      : "No cards played yet"}
-                  </strong>
-                  <span>
-                    {lastPlay ? (
-                      <>
-                        Claimed <b>{rankName(lastPlay.rank)}</b>
-                        <span
-                          className={`claim-outcome outcome-${lastPlay.outcome}`}
-                        >
-                          {
-                            {
-                              pending: "Awaiting challenge",
-                              accepted: "Accepted",
-                              caught: "Bluff caught",
-                              truthful: "Truthful",
-                            }[lastPlay.outcome]
-                          }
-                        </span>
-                      </>
-                    ) : (
-                      "The first claim will appear here"
-                    )}
-                  </span>
-                </div>
-                <div className="status-pile">
-                  <span className="status-label">PILE</span>
-                  <strong>
-                    {state?.pileCount ?? 0}
-                    <small> cards</small>
-                  </strong>
-                  <span>
-                    {state?.deadline
-                      ? `${seconds}s remaining`
-                      : `Round ${state?.round ?? 1}`}
-                  </span>
-                </div>
-              </div>
+                {phaseTitle}
+                {lastPlay
+                  ? `. ${lastPlayer?.id === state?.selfId ? "You" : (lastPlayer?.name ?? "Player")} claimed ${lastPlay.count} ${rankName(lastPlay.rank, lastPlay.count)}.`
+                  : "."}
+              </p>
               {!connected && (
                 <div className="connection-banner" role="status">
                   <LoaderCircle size={14} className="spin" /> Reconnecting… Your
@@ -1017,7 +983,9 @@ export default function App() {
                 </div>
               )}
               <div
-                className={`table-stage phase-${state?.phase ?? "loading"} players-${state?.players.length ?? 4}`}
+                className={`table-stage phase-${state?.phase ?? "loading"} players-${playerCount}`}
+                data-player-count={playerCount}
+                data-table-shape={tableShape}
                 ref={tableRef}
                 style={
                   {
@@ -1031,17 +999,21 @@ export default function App() {
                     ),
                     "--seat-scale": Math.max(
                       0.63,
-                      Math.min(1, tableHeight / 310),
+                      Math.min(
+                        state && state.players.length >= 7
+                          ? 0.82
+                          : state && state.players.length >= 5
+                            ? 0.9
+                            : 1,
+                        tableHeight / 310,
+                      ),
                     ),
                   } as CSSProperties
                 }
               >
                 <div className="table-ambient" />
-                {state && <ReactionBursts reactions={reactions} state={state} />}
-                {state && state.phase !== "lobby" && (
-                  <div className="mobile-player-roster" aria-label="Players at the table">
-                    <PlayerRoster state={state} seconds={seconds} compact />
-                  </div>
+                {state && (
+                  <ReactionBursts reactions={reactions} state={state} />
                 )}
                 <div className="table-physical">
                   {state && (
@@ -1053,12 +1025,18 @@ export default function App() {
                       />
                     </Suspense>
                   )}
-                  {state && ["challenge", "reveal", "resolution"].includes(state.phase) && (
-                    <div className={`phase-moment moment-${state.phase}`} aria-hidden="true">
-                      <span>{state.phase === "challenge" ? "👀" : "💥"}</span>
-                      <span>{state.phase === "challenge" ? "🤫" : "😱"}</span>
-                    </div>
-                  )}
+                  {state &&
+                    ["challenge", "reveal", "resolution"].includes(
+                      state.phase,
+                    ) && (
+                      <div
+                        className={`phase-moment moment-${state.phase}`}
+                        aria-hidden="true"
+                      >
+                        <span>{state.phase === "challenge" ? "👀" : "💥"}</span>
+                        <span>{state.phase === "challenge" ? "🤫" : "😱"}</span>
+                      </div>
+                    )}
                   <div className="table-rail">
                     <div className="table-felt">
                       <div className="felt-line" />
@@ -1103,9 +1081,22 @@ export default function App() {
                       active={isTurn}
                       local
                       listening={speech.listening}
-                      style={{ left: "50%", top: "90%" }}
+                      style={
+                        {
+                          left: "50%",
+                          top: "90%",
+                          "--seat-scale": Math.max(
+                            0.78,
+                            Math.min(1, tableHeight / 310),
+                          ),
+                        } as CSSProperties
+                      }
                     />
-                    <div className="local-reaction-dock" role="group" aria-label="Send a table reaction">
+                    <div
+                      className="local-reaction-dock"
+                      role="group"
+                      aria-label="Send a table reaction"
+                    >
                       <button
                         className={`emoji-toggle ${emojiOpen ? "emoji-toggle-open" : ""}`}
                         disabled={!connected || state?.spectator}
@@ -1116,7 +1107,11 @@ export default function App() {
                         😄
                       </button>
                       {emojiOpen && (
-                        <div className="reaction-picker" role="menu" aria-label="Choose a reaction">
+                        <div
+                          className="reaction-picker"
+                          role="menu"
+                          aria-label="Choose a reaction"
+                        >
                           {REACTIONS.map((emoji) => (
                             <button
                               key={emoji}
@@ -1350,11 +1345,19 @@ export default function App() {
                                   </button>
                                 )}
                               </>
-                            ) : (
-                              <div className="table-motto">
-                                Trust nobody. <span>Play everybody.</span>
-                              </div>
-                            )}
+                            ) : lastPlay ? (
+                              <>
+                                <span className="claim-speaker">
+                                  {lastPlayer?.id === state.selfId
+                                    ? "You played"
+                                    : `${lastPlayer?.name ?? "Player"} played`}
+                                </span>
+                                <strong className="claim-description">
+                                  {lastPlay.count} ×{" "}
+                                  {rankName(lastPlay.rank, lastPlay.count)}
+                                </strong>
+                              </>
+                            ) : null}
                           </div>
                         </>
                       )}
@@ -1362,55 +1365,13 @@ export default function App() {
                   )
                 )}
               </div>
-              <div className="table-bottom-meta">
-                <span>
-                  <span className="mini-dot" />{" "}
-                  {state?.phase === "lobby"
-                    ? "Waiting for friends"
-                    : `Round ${String(state?.round ?? 1).padStart(2, "0")}${roundMode ? ` · Turn ${(state?.turnsTaken ?? 0) + 1}/${state?.players.length}` : ""}`}
-                </span>
-                <span>
-                  {state?.spectator ? (
-                    <>
-                      <Eye size={12} /> Spectating
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck size={12} /> Only you can see your cards
-                    </>
-                  )}
-                </span>
-                <button
-                  onClick={() => setModal(lastReveal ? "reveal" : "rules")}
-                >
-                  {lastReveal ? "Last reveal" : "Table rules"}{" "}
-                  <ChevronRight size={12} />
-                </button>
-              </div>
-
               <div className="hand-section">
                 <div className="hand-heading">
                   <div>
-                    <span className="eyebrow">
-                      {state?.spectator
-                        ? "THE BEST SEAT IN THE HOUSE"
-                        : "YOUR HAND"}
-                    </span>
                     <span className="hand-count">
-                      {state?.hand.length ?? 0} cards
+                      <Layers size={12} /> {state?.hand.length ?? 0}
                     </span>
                   </div>
-                  <span className="hand-hint">
-                    {state?.phase === "lobby"
-                      ? "The cards arrive when everyone’s ready."
-                      : state?.spectator
-                        ? "Enjoy the game. Hidden cards stay hidden."
-                        : selected.length
-                          ? `${selected.length} selected · looking convincing`
-                          : isTurn
-                            ? "Pick your cards. Sell your story."
-                            : "A good poker face is worth the wait."}
-                  </span>
                   {pageCount > 1 && (
                     <div
                       className="hand-pagination"
@@ -1431,10 +1392,7 @@ export default function App() {
                             pageStart + pageSize,
                             state?.hand.length ?? 0,
                           )}{" "}
-                          of {state?.hand.length}
-                        </span>
-                        <span className="page-number">
-                          Page {currentPage + 1}/{pageCount}
+                          / {state?.hand.length}
                         </span>
                       </span>
                       <button
@@ -1443,7 +1401,7 @@ export default function App() {
                         disabled={currentPage === pageCount - 1}
                         onClick={() => setHandPage(currentPage + 1)}
                       >
-                        Next <ChevronRight size={15} />
+                        <ChevronRight size={15} />
                       </button>
                     </div>
                   )}
@@ -1517,7 +1475,7 @@ export default function App() {
               </div>
 
               <div
-                className={`action-zone ${canChallenge ? "challenge-zone" : ""}`}
+                className={`action-zone ${canChallenge ? "challenge-zone" : ""} ${state && !["lobby", "winner"].includes(state.phase) && !canChallenge && !isTurn ? "action-zone-idle" : ""}`}
               >
                 {state?.phase === "lobby" || state?.phase === "winner" ? (
                   <div className="lobby-actions">
@@ -1540,7 +1498,9 @@ export default function App() {
                         onClick={() => act("ready")}
                       >
                         <Check size={16} />
-                        {me?.ready ? "Ready — waiting for the table" : "Ready for the next game"}
+                        {me?.ready
+                          ? "Ready — waiting for the table"
+                          : "Ready for the next game"}
                       </button>
                     ) : state.hostId === state.selfId ? (
                       <button
@@ -1574,15 +1534,6 @@ export default function App() {
                   </div>
                 ) : canChallenge ? (
                   <div className="challenge-actions">
-                    <div>
-                      <span className="eyebrow">SOMETHING FEEL OFF?</span>
-                      <strong>
-                        {claimPlayer?.name} claims {state?.claim?.count}{" "}
-                        {state?.claim?.count === 1 ? "card" : "cards"} of{" "}
-                        {state?.claim?.rank}.
-                      </strong>
-                      <span>You have {seconds}s to trust your gut.</span>
-                    </div>
                     <button
                       className="button accept-button"
                       disabled={busy || !connected}
@@ -1600,7 +1551,7 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    <div className="turn-action-heading">
+                    <div className="turn-action-heading action-status-sr">
                       <span
                         className={`turn-tag ${isTurn ? "your-turn-tag" : ""}`}
                       >
@@ -1618,80 +1569,85 @@ export default function App() {
                                 ? "The truth is out"
                                 : `${active?.name ?? "The table"}’s turn`}
                       </span>
-                      <span className="action-guidance">
-                        {isTurn
-                          ? lockedRank
-                            ? `Claim ${rankName(lockedRank)} or pass. Rank is locked.`
-                            : "Play any cards to choose the rank, or pass."
-                          : state?.phase === "challenge"
-                            ? "The table is considering the claim…"
-                            : "Sit tight. Read the room."}
-                      </span>
-                      {state?.deadline ? (
-                        <span
-                          className={`timer ${seconds <= 5 ? "timer-urgent" : ""}`}
-                        >
-                          <span
-                            className="timer-ring"
-                            style={
-                              {
-                                "--progress": `${(seconds / (state.phase === "challenge" ? state.settings.challengeSeconds : state.settings.turnSeconds)) * 100}%`,
-                              } as CSSProperties
-                            }
-                          />
-                          {String(seconds).padStart(2, "0")}
-                          <small>s</small>
-                        </span>
-                      ) : null}
                     </div>
-                    <div className="play-controls">
-                      <div className="rank-group">
-                        <label htmlFor="rank-picker">I’M CLAIMING</label>
-                        <div className="rank-select-wrap">
-                          <select
-                            id="rank-picker"
-                            value={rank}
-                            onChange={(e) => setRank(e.target.value as Rank)}
-                            disabled={!isTurn || !!lockedRank}
-                          >
-                            {RANKS.map((r) => (
-                              <option key={r} value={r}>
-                                {rankName(r)}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} />
-                        </div>
-                      </div>
-                      <div className="selected-info">
-                        <strong>{selected.length}</strong>
-                        <span>
-                          card{selected.length === 1 ? "" : "s"} selected
-                        </span>
-                        <button
-                          disabled={!selected.length}
-                          onClick={() => setSelected([])}
+                    {isTurn && (
+                      <div className="play-controls">
+                        <div
+                          className={`rank-group ${lockedRank ? "rank-group-locked" : ""}`}
                         >
-                          Clear
+                          <label htmlFor="rank-picker">I’M CLAIMING</label>
+                          {lockedRank ? (
+                            <>
+                              <select
+                                id="rank-picker"
+                                className="rank-select-sr"
+                                value={lockedRank}
+                                disabled
+                                aria-label="I’M CLAIMING"
+                              >
+                                {RANKS.map((r) => (
+                                  <option key={r} value={r}>
+                                    {rankName(r)}
+                                  </option>
+                                ))}
+                              </select>
+                              <div
+                                className="locked-rank-chip"
+                                aria-hidden="true"
+                              >
+                                <LockKeyhole size={13} />
+                                <span>{rankName(lockedRank)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="rank-select-wrap">
+                              <select
+                                id="rank-picker"
+                                value={rank}
+                                onChange={(e) =>
+                                  setRank(e.target.value as Rank)
+                                }
+                              >
+                                {RANKS.map((r) => (
+                                  <option key={r} value={r}>
+                                    {rankName(r)}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown size={14} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="selected-info">
+                          <strong>{selected.length}</strong>
+                          <span>selected</span>
+                          <button
+                            disabled={!selected.length}
+                            onClick={() => setSelected([])}
+                            aria-label="Clear selected cards"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                        <button
+                          className="button primary play-button"
+                          aria-label="Play cards"
+                          disabled={!selected.length || busy || !connected}
+                          onClick={play}
+                        >
+                          <span>PLAY</span>
+                          {selected.length > 0 && <b>{selected.length}</b>}
+                          <ArrowRight size={17} />
+                        </button>
+                        <button
+                          className="pass-button"
+                          disabled={busy || !connected}
+                          onClick={() => act("pass")}
+                        >
+                          Pass
                         </button>
                       </div>
-                      <button
-                        className="button primary play-button"
-                        disabled={
-                          !isTurn || !selected.length || busy || !connected
-                        }
-                        onClick={play}
-                      >
-                        Play cards <ArrowRight size={17} />
-                      </button>
-                      <button
-                        className="pass-button"
-                        disabled={!isTurn || busy || !connected}
-                        onClick={() => act("pass")}
-                      >
-                        Pass
-                      </button>
-                    </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1786,13 +1742,19 @@ export default function App() {
                       >
                         <Avatar index={message.avatar} />
                         <p>
-                          <strong>{message.playerId === state?.selfId ? "You" : message.name}</strong>
+                          <strong>
+                            {message.playerId === state?.selfId
+                              ? "You"
+                              : message.name}
+                          </strong>
                           <span>{message.text}</span>
                         </p>
                       </div>
                     ))
                   ) : (
-                    <p className="chat-empty">Drop a reaction, or say something suspicious.</p>
+                    <p className="chat-empty">
+                      Drop a reaction, or say something suspicious.
+                    </p>
                   )}
                 </div>
                 <form className="chat-compose" onSubmit={sendChat}>
@@ -1801,10 +1763,19 @@ export default function App() {
                     maxLength={180}
                     onChange={(event) => setChatText(event.target.value)}
                     disabled={!connected || state?.spectator}
-                    placeholder={state?.spectator ? "Spectators can watch chat" : "Say something…"}
+                    placeholder={
+                      state?.spectator
+                        ? "Spectators can watch chat"
+                        : "Say something…"
+                    }
                     aria-label="Send a table chat message"
                   />
-                  <button disabled={!chatText.trim() || !connected || state?.spectator} aria-label="Send message">
+                  <button
+                    disabled={
+                      !chatText.trim() || !connected || state?.spectator
+                    }
+                    aria-label="Send message"
+                  >
                     <ArrowRight size={14} />
                   </button>
                 </form>
@@ -1823,8 +1794,8 @@ export default function App() {
                   {voice.connecting
                     ? "Connecting…"
                     : voice.enabled
-                      ? "Voice on"
-                      : "Join voice"}
+                      ? "Leave voice chat"
+                      : "Join voice chat"}
                 </button>
               </section>
             </aside>

@@ -45,6 +45,8 @@ test("eight-player tables and selected cards stay inside a single responsive scr
     );
     await page.goto("/");
     await expect(page.locator(".turn-tag")).toHaveText("Your move");
+    await expect(page.locator(".game-status")).toBeHidden();
+    await expect(page.locator(".game-announcer")).not.toBeVisible();
     await expect(page.locator(".player-seat")).toHaveCount(8);
     for (const [width, height] of [
       [1440, 900],
