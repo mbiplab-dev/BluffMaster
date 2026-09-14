@@ -129,6 +129,18 @@ export class Storage {
     room.spectators = new Set((data.spectators as string[] | undefined) ?? []);
     return room;
   }
+  async remoteRooms(): Promise<Room[]> {
+    if (!this.redis) return [];
+    const keys = await this.redis.keys("bluff:room:*");
+    if (!keys.length) return [];
+    const values = await this.redis.mget<Record<string, unknown>[]>(...keys);
+    return values.flatMap((data) => {
+      if (!data) return [];
+      const room = data as unknown as Room;
+      room.spectators = new Set((data.spectators as string[] | undefined) ?? []);
+      return [room];
+    });
+  }
   async remoteSession(token: string): Promise<Session | undefined> {
     if (!this.redis) return undefined;
     const data = await this.redis.get<Record<string, unknown>>(`bluff:session:${token}`);

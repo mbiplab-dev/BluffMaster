@@ -188,6 +188,11 @@ function leave(s: Session, explicit = false) {
   if (explicit) s.roomCode = undefined;
 }
 io.on("connection", async (socket) => {
+  // Directory state is hydrated before the first rooms event so public rooms
+  // created on another Vercel function instance are discoverable.
+  for (const room of await storage.remoteRooms()) {
+    if (!rooms.has(room.code)) rooms.set(room.code, room);
+  }
   socket.emit("rooms", openRooms());
   const supplied = socket.handshake.auth?.token;
   let session =
