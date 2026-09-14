@@ -7,3 +7,5 @@ playwright-report/
 .data/
 .vercel
 .env*
+.agents/
+skills-lock.json

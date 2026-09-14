@@ -6,7 +6,7 @@
   "functions": {
     "api/socket.ts": {
       "runtime": "nodejs22.x",
-      "maxDuration": 800
+      "maxDuration": 300
     }
   },
   "rewrites": [
