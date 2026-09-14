@@ -44,6 +44,7 @@ app.use((_req, res, next) => {
 });
 export const http = createServer(app);
 export const io = new Server(http, {
+  path: "/api/socket",
   maxHttpBufferSize: 24_000,
   pingTimeout: 20_000,
   allowRequest: (req, callback) => {

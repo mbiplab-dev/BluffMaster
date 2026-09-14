@@ -61,6 +61,7 @@ export function useGame(notify: (text: string) => void) {
   );
   useEffect(() => {
     const connection = io({
+      path: "/api/socket",
       auth: { token: sessionStorage.getItem("bluff-session") },
       autoConnect: false,
     });

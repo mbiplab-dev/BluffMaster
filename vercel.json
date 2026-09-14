@@ -8,12 +8,9 @@
       "maxDuration": 300
     }
   },
-  "rewrites": [
-    { "source": "/socket.io/:path*", "destination": "/api/socket" }
-  ],
   "headers": [
     {
-      "source": "/socket.io/(.*)",
+      "source": "/api/socket/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "no-store" }]
     }
   ]
